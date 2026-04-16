@@ -23,7 +23,7 @@ function fmtTime(iso: string | null, dayFilter: string): string {
 }
 
 type SortCol = "username" | "forsta_anslutning" | "senaste_aktivitet" | "max_duration_min" | "max_mb_in" | "max_mb_out";
-type SortDir = "desc" | "asc";
+type SortKey = { col: SortCol; dir: "desc" | "asc" };
 
 function fmtMb(mb: number | null): string {
   if (mb == null) return "–";
@@ -38,12 +38,29 @@ export default function DailySummaryWidget() {
   const [loading, setLoading] = useState(true);
   const [error, setError]   = useState<string | null>(null);
   const [dayFilter, setDayFilter] = useState<string>("");
-  const [sortCol, setSortCol] = useState<SortCol>("max_mb_in");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  // Empty = implicit sort only. Click = primary key, Shift+click = add secondary key.
+  const [sortKeys, setSortKeys] = useState<SortKey[]>([]);
 
-  const handleSort = (col: SortCol) => {
-    setSortDir((d) => (sortCol === col ? (d === "desc" ? "asc" : "desc") : "desc"));
-    setSortCol(col);
+  const handleSort = (col: SortCol, e: React.MouseEvent) => {
+    if (e.shiftKey) {
+      setSortKeys((prev) => {
+        const idx = prev.findIndex((k) => k.col === col);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = { col, dir: prev[idx].dir === "desc" ? "asc" : "desc" };
+          return next;
+        }
+        return [...prev, { col, dir: "desc" }];
+      });
+    } else {
+      setSortKeys((prev) => {
+        const existing = prev.find((k) => k.col === col);
+        if (existing && prev.length === 1) {
+          return [{ col, dir: existing.dir === "desc" ? "asc" : "desc" }];
+        }
+        return [{ col, dir: "desc" }];
+      });
+    }
   };
 
   const fetch_ = useCallback(async () => {
@@ -74,30 +91,36 @@ export default function DailySummaryWidget() {
   const base = dayFilter ? rows.filter((r) => r.dag === dayFilter) : rows;
 
   const sorted = [...base].sort((a, b) => {
-    if (sortCol === "username") {
-      const cmp = a.username.localeCompare(b.username);
-      return sortDir === "asc" ? cmp : -cmp;
+    for (const { col, dir } of sortKeys) {
+      let cmp = 0;
+      if (col === "username") {
+        cmp = a.username.localeCompare(b.username);
+      } else if (col === "forsta_anslutning" || col === "senaste_aktivitet") {
+        const av = a[col] ?? "";
+        const bv = b[col] ?? "";
+        cmp = av < bv ? -1 : av > bv ? 1 : 0;
+      } else {
+        const av = (a[col] as number | null) ?? -1;
+        const bv = (b[col] as number | null) ?? -1;
+        cmp = av < bv ? -1 : av > bv ? 1 : 0;
+      }
+      if (cmp !== 0) return dir === "desc" ? -cmp : cmp;
     }
-    if (sortCol === "forsta_anslutning" || sortCol === "senaste_aktivitet") {
-      const av = a[sortCol] ?? "";
-      const bv = b[sortCol] ?? "";
-      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
-      return sortDir === "asc" ? cmp : -cmp;
-    }
-    const av = (a[sortCol] as number | null) ?? -1;
-    const bv = (b[sortCol] as number | null) ?? -1;
-    return sortDir === "desc" ? bv - av : av - bv;
+    // Implicit tiebreakers – always descending: total data → duration
+    const totalDiff = ((b.max_mb_in ?? 0) + (b.max_mb_out ?? 0)) - ((a.max_mb_in ?? 0) + (a.max_mb_out ?? 0));
+    if (totalDiff !== 0) return totalDiff;
+    return (b.max_duration_min ?? -1) - (a.max_duration_min ?? -1);
   });
 
-  type ColDef = { col: SortCol | null; label: string };
+  type ColDef = { col: SortCol | null; label: string; align: "left" | "right" };
   const columns: ColDef[] = [
-    { col: "username",           label: "Användare" },
-    { col: "forsta_anslutning",  label: "Första"    },
-    { col: "senaste_aktivitet",  label: "Senaste"   },
-    { col: "max_duration_min",   label: "Max tid"   },
-    { col: "max_mb_in",          label: "↓ In"      },
-    { col: "max_mb_out",         label: "↑ Ut"      },
-    { col: null,                 label: "Tunnel"    },
+    { col: "username",           label: "Användare", align: "left"  },
+    { col: "forsta_anslutning",  label: "Första",    align: "right" },
+    { col: "senaste_aktivitet",  label: "Senaste",   align: "right" },
+    { col: "max_duration_min",   label: "Max tid",   align: "right" },
+    { col: "max_mb_in",          label: "↓ In",      align: "right" },
+    { col: "max_mb_out",         label: "↑ Ut",      align: "right" },
+    { col: null,                 label: "Tunnel",    align: "left"  },
   ];
 
   return (
@@ -132,16 +155,23 @@ export default function DailySummaryWidget() {
           <table className="w-full text-xs text-gray-300 border-collapse">
             <thead>
               <tr className="text-gray-500 uppercase tracking-wider border-b border-gray-700 sticky top-0 bg-gray-900 select-none">
-                {columns.map(({ col, label }, i) => (
+                {columns.map(({ col, label, align }, i) => (
                   <th
                     key={i}
-                    className={`text-left pb-2 pr-3 ${col ? "cursor-pointer hover:text-gray-300 transition-colors" : ""}`}
-                    onClick={col ? () => handleSort(col) : undefined}
+                    className={`pb-2 pr-3 ${align === "right" ? "text-right" : "text-left"} ${col ? "cursor-pointer hover:text-gray-300 transition-colors" : ""}`}
+                    onClick={col ? (e) => handleSort(col, e) : undefined}
                   >
                     {label}
-                    {col && sortCol === col && (
-                      <span className="ml-1 text-indigo-400">{sortDir === "desc" ? "↓" : "↑"}</span>
-                    )}
+                    {col && (() => {
+                      const idx = sortKeys.findIndex((k) => k.col === col);
+                      if (idx < 0) return null;
+                      return (
+                        <span className="ml-1 text-indigo-400">
+                          {sortKeys[idx].dir === "desc" ? "↓" : "↑"}
+                          {sortKeys.length > 1 && <sup className="text-[9px]">{idx + 1}</sup>}
+                        </span>
+                      );
+                    })()}
                   </th>
                 ))}
               </tr>

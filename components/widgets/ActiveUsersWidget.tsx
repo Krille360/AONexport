@@ -44,7 +44,7 @@ function StatusBadge({ state }: { state: string | null }) {
 }
 
 type SortCol = "username" | "duration_min" | "total_bytes_in" | "total_bytes_out" | "avg_bps_in" | "avg_bps_out";
-type SortDir = "desc" | "asc";
+type SortKey = { col: SortCol; dir: "desc" | "asc" };
 
 export default function ActiveUsersWidget({
   onTotalsUpdate,
@@ -54,12 +54,29 @@ export default function ActiveUsersWidget({
   const [sessions, setSessions] = useState<ActiveSession[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
-  const [sortCol, setSortCol]   = useState<SortCol>("duration_min");
-  const [sortDir, setSortDir]   = useState<SortDir>("desc");
+  // Empty = implicit sort only (largest first). Click = primary key, Shift+click = add secondary key.
+  const [sortKeys, setSortKeys] = useState<SortKey[]>([]);
 
-  const handleSort = (col: SortCol) => {
-    setSortDir((d) => (sortCol === col ? (d === "desc" ? "asc" : "desc") : "desc"));
-    setSortCol(col);
+  const handleSort = (col: SortCol, e: React.MouseEvent) => {
+    if (e.shiftKey) {
+      setSortKeys((prev) => {
+        const idx = prev.findIndex((k) => k.col === col);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = { col, dir: prev[idx].dir === "desc" ? "asc" : "desc" };
+          return next;
+        }
+        return [...prev, { col, dir: "desc" }];
+      });
+    } else {
+      setSortKeys((prev) => {
+        const existing = prev.find((k) => k.col === col);
+        if (existing && prev.length === 1) {
+          return [{ col, dir: existing.dir === "desc" ? "asc" : "desc" }];
+        }
+        return [{ col, dir: "desc" }];
+      });
+    }
   };
 
   const fetch_ = useCallback(async () => {
@@ -89,13 +106,24 @@ export default function ActiveUsersWidget({
   }, [fetch_]);
 
   const sorted = [...sessions].sort((a, b) => {
-    if (sortCol === "username") {
-      const cmp = a.username.localeCompare(b.username);
-      return sortDir === "asc" ? cmp : -cmp;
+    // Apply user-defined sort keys in order
+    for (const { col, dir } of sortKeys) {
+      let cmp = 0;
+      if (col === "username") {
+        cmp = a.username.localeCompare(b.username);
+      } else {
+        const av = (a[col] as number) ?? -1;
+        const bv = (b[col] as number) ?? -1;
+        cmp = av < bv ? -1 : av > bv ? 1 : 0;
+      }
+      if (cmp !== 0) return dir === "desc" ? -cmp : cmp;
     }
-    const av = (a[sortCol] as number) ?? -1;
-    const bv = (b[sortCol] as number) ?? -1;
-    return sortDir === "desc" ? bv - av : av - bv;
+    // Implicit tiebreakers – always descending: total traffic → duration → speed
+    const totalDiff = (b.total_bytes_in + b.total_bytes_out) - (a.total_bytes_in + a.total_bytes_out);
+    if (totalDiff !== 0) return totalDiff;
+    const durDiff = (b.duration_min ?? -1) - (a.duration_min ?? -1);
+    if (durDiff !== 0) return durDiff;
+    return (b.avg_bps_in + b.avg_bps_out) - (a.avg_bps_in + a.avg_bps_out);
   });
 
   const columns: { col: SortCol | null; label: string; align: string }[] = [
@@ -124,13 +152,20 @@ export default function ActiveUsersWidget({
             {columns.map(({ col, label, align }, i) => (
               <th
                 key={i}
-                className={`pb-2 pr-3 text-left ${col ? "cursor-pointer hover:text-gray-300 transition-colors" : ""}`}
-                onClick={col ? () => handleSort(col) : undefined}
+                className={`pb-2 pr-3 ${align === "right" ? "text-right" : "text-left"} ${col ? "cursor-pointer hover:text-gray-300 transition-colors" : ""}`}
+                onClick={col ? (e) => handleSort(col, e) : undefined}
               >
                 {label}
-                {col && sortCol === col && (
-                  <span className="ml-1 text-indigo-400">{sortDir === "desc" ? "↓" : "↑"}</span>
-                )}
+                {col && (() => {
+                  const idx = sortKeys.findIndex((k) => k.col === col);
+                  if (idx < 0) return null;
+                  return (
+                    <span className="ml-1 text-indigo-400">
+                      {sortKeys[idx].dir === "desc" ? "↓" : "↑"}
+                      {sortKeys.length > 1 && <sup className="text-[9px]">{idx + 1}</sup>}
+                    </span>
+                  );
+                })()}
               </th>
             ))}
           </tr>
