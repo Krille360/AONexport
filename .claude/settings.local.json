@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//svnipfs-0001/userdata$/chrnor01/Mina Dokument/AONexport/**)",
+      "Read(//svnipfs-0001/userdata$/chrnor01/Mina Dokument/AONexport/app/**)",
+      "Read(//svnipfs-0001/userdata$/chrnor01/Mina Dokument/**)"
+    ]
+  }
+}
