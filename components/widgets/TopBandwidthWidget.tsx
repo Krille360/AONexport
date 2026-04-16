@@ -108,15 +108,15 @@ export default function TopBandwidthWidget() {
               }}
               formatter={(v: number, name: string) => [
                 `${v} MB`,
-                name === "mb_in" ? "In" : "Ut",
+                name === "mb_in" ? "Upp" : "Ned",
               ]}
             />
-            <Bar dataKey="mb_in" name="In" stackId="a" fill="#34d399" radius={[0, 0, 0, 0]}>
+            <Bar dataKey="mb_in" name="Upp" stackId="a" fill="#34d399" radius={[0, 0, 0, 0]}>
               {chartData.map((_, i) => (
                 <Cell key={i} fill={COLORS[i % COLORS.length]} />
               ))}
             </Bar>
-            <Bar dataKey="mb_out" name="Ut" stackId="a" fill="#f59e0b" radius={[0, 2, 2, 0]} />
+            <Bar dataKey="mb_out" name="Ned" stackId="a" fill="#f59e0b" radius={[0, 2, 2, 0]} />
           </BarChart>
         </ResponsiveContainer>
       )}

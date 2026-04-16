@@ -128,12 +128,12 @@ export default function BandwidthChartWidget() {
                   labelFormatter={(v) => String(v).substring(0, 16)}
                   formatter={(v: number, name: string) => [
                     `${v.toFixed(3)} Mbit/s`,
-                    name === "mbps_in" ? "↓ Ned" : "↑ Upp",
+                    name === "mbps_in" ? "↑ Upp" : "↓ Ned",
                   ]}
                 />
                 <Legend
                   wrapperStyle={{ fontSize: 11, color: "#9ca3af", paddingTop: 4 }}
-                  formatter={(v) => v === "mbps_in" ? "↓ Ned" : "↑ Upp"}
+                  formatter={(v) => v === "mbps_in" ? "↑ Upp" : "↓ Ned"}
                 />
                 <Area
                   type="monotone" dataKey="mbps_in"
@@ -157,13 +157,13 @@ export default function BandwidthChartWidget() {
               return (
                 <div className="flex flex-wrap gap-6 shrink-0 text-xs text-gray-400 border-t border-gray-700 pt-2">
                   <div className="flex items-center gap-3">
-                    <span className="text-emerald-400 font-semibold">↓ Ned</span>
+                    <span className="text-emerald-400 font-semibold">↑ Upp</span>
                     <span>Avg: <strong className="text-gray-200">{avg(inVals).toFixed(2)}</strong></span>
                     <span>Max: <strong className="text-gray-200">{Math.max(...inVals).toFixed(2)}</strong></span>
                     <span>Min: <strong className="text-gray-200">{Math.min(...inVals).toFixed(2)}</strong></span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-amber-400 font-semibold">↑ Upp</span>
+                    <span className="text-amber-400 font-semibold">↓ Ned</span>
                     <span>Avg: <strong className="text-gray-200">{avg(outVals).toFixed(2)}</strong></span>
                     <span>Max: <strong className="text-gray-200">{Math.max(...outVals).toFixed(2)}</strong></span>
                     <span>Min: <strong className="text-gray-200">{Math.min(...outVals).toFixed(2)}</strong></span>

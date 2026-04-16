@@ -92,13 +92,13 @@ export default function StatsCardWidget() {
         {/* Ned / Upp spans full bottom row */}
         <div className="col-span-3 grid grid-cols-2 gap-4 pt-2 border-t border-gray-800">
           <StatCard
-            label="↓ Ned"
+            label="↑ Upp"
             value={stats ? fmtBits(stats.total_bps_in)  : "–"}
             color="text-emerald-400"
             small
           />
           <StatCard
-            label="↑ Upp"
+            label="↓ Ned"
             value={stats ? fmtBits(stats.total_bps_out) : "–"}
             color="text-amber-400"
             small

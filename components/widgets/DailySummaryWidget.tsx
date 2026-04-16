@@ -130,8 +130,8 @@ export default function DailySummaryWidget() {
     { col: "forsta_anslutning",  label: "Första",    align: "right" },
     { col: "senaste_aktivitet",  label: "Senaste",   align: "right" },
     { col: "max_duration_min",   label: "Max tid",   align: "right" },
-    { col: "max_mb_in",          label: "↓ In",      align: "right" },
-    { col: "max_mb_out",         label: "↑ Ut",      align: "right" },
+    { col: "max_mb_in",          label: "↑ Upp",     align: "right" },
+    { col: "max_mb_out",         label: "↓ Ned",     align: "right" },
     { col: null,                 label: "Tunnel",    align: "left"  },
   ];
 

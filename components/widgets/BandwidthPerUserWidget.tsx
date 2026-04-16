@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend,
+  Tooltip, ResponsiveContainer,
 } from "recharts";
 import WidgetShell from "./WidgetShell";
 import TimeRangeSelector, { getPresetDates, toLocalSQL, type RangePreset } from "./TimeRangeSelector";
@@ -51,6 +51,73 @@ function shortUser(u: string): string {
   return u.includes("@") ? u.split("@")[0] : u;
 }
 
+// ─── Custom tooltip ───────────────────────────────────────────────────────────
+interface TooltipPayloadItem {
+  name:  string;
+  value: number;
+  color?: string;
+}
+interface CustomTooltipProps {
+  active?:  boolean;
+  payload?: TooltipPayloadItem[];
+  label?:   string;
+  users:    string[];
+  userColors: [string, string][];
+  hidden:   Set<string>;
+}
+
+function CustomTooltip({ active, payload, label, users, userColors, hidden }: CustomTooltipProps) {
+  if (!active || !payload?.length) return null;
+
+  // Build a map of all values at this data point
+  const valMap: Record<string, number> = {};
+  for (const p of payload) valMap[p.name] = p.value;
+
+  // Only show users that are visible and have non-zero activity at this bucket
+  const visibleUsers = users.filter(
+    (u) => !hidden.has(u) && ((valMap[`${u}_in`] ?? 0) > 0 || (valMap[`${u}_out`] ?? 0) > 0)
+  );
+
+  if (visibleUsers.length === 0) return null;
+
+  return (
+    <div
+      style={{
+        background: "#1f2937",
+        border: "1px solid #374151",
+        borderRadius: 8,
+        fontSize: 11,
+        color: "#f3f4f6",
+        padding: "8px 10px",
+        maxHeight: 280,
+        overflowY: "auto",
+        minWidth: 200,
+      }}
+    >
+      <div style={{ color: "#9ca3af", marginBottom: 6, fontWeight: 600 }}>
+        {String(label).substring(0, 16)}
+      </div>
+      {visibleUsers.map((u, i) => {
+        const idx = users.indexOf(u);
+        const [colorIn, colorOut] = userColors[idx % userColors.length];
+        const mbIn  = (valMap[`${u}_in`]  ?? 0).toFixed(3);
+        const mbOut = (valMap[`${u}_out`] ?? 0).toFixed(3);
+        return (
+          <div key={u} style={{ display: "flex", alignItems: "center", gap: 8, padding: "2px 0",
+            borderTop: i > 0 ? "1px solid #374151" : undefined }}>
+            <span style={{ fontWeight: 600, flex: "0 0 auto", maxWidth: 130,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {shortUser(u)}
+            </span>
+            <span style={{ color: colorIn,  flex: 1, textAlign: "right" }}>↑ {mbIn}</span>
+            <span style={{ color: colorOut, flex: 1, textAlign: "right" }}>↓ {mbOut}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function BandwidthPerUserWidget() {
   const [chartData, setChartData] = useState<ChartPoint[]>([]);
   const [users, setUsers]         = useState<string[]>([]);
@@ -82,6 +149,13 @@ export default function BandwidthPerUserWidget() {
         const pt = map.get(r.bucket)!;
         pt[`${r.username}_in`]  = r.mbps_in;
         pt[`${r.username}_out`] = r.mbps_out;
+      }
+      // Fill missing user keys with 0 so disconnected users drop to 0 instead of gapping
+      for (const pt of map.values()) {
+        for (const u of userList) {
+          if (pt[`${u}_in`]  === undefined) pt[`${u}_in`]  = 0;
+          if (pt[`${u}_out`] === undefined) pt[`${u}_out`] = 0;
+        }
       }
       setChartData(Array.from(map.values()).sort((a, b) =>
         String(a.bucket) < String(b.bucket) ? -1 : 1
@@ -158,18 +232,13 @@ export default function BandwidthPerUserWidget() {
                   width={60}
                 />
                 <Tooltip
-                  contentStyle={{
-                    background: "#1f2937", border: "1px solid #374151",
-                    borderRadius: 8, color: "#f3f4f6", fontSize: 11,
-                    maxHeight: 300, overflowY: "auto",
-                  }}
-                  labelStyle={{ color: "#9ca3af" }}
-                  labelFormatter={(v) => String(v).substring(0, 16)}
-                  formatter={(v: number, name: string) => {
-                    const isIn = name.endsWith("_in");
-                    const user = name.replace(/_in$|_out$/, "");
-                    return [`${Number(v).toFixed(3)} Mbit/s`, `${shortUser(user)} ${isIn ? "↓" : "↑"}`];
-                  }}
+                  content={
+                    <CustomTooltip
+                      users={users}
+                      userColors={USER_COLORS}
+                      hidden={hidden}
+                    />
+                  }
                 />
                 {/* No built-in Legend – we use custom user toggles below */}
                 {users.map((u, idx) => {

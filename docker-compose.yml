@@ -1,17 +1,42 @@
 services:
 
+  mariadb:
+    image: mariadb:11
+    container_name: vpn-mariadb
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootsecret}
+      MARIADB_DATABASE:      ${DB_NAME:-vpn_logs}
+      MARIADB_USER:          ${DB_USER:-vpnuser}
+      MARIADB_PASSWORD:      ${DB_PASSWORD:-changeme}
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    ports:
+      - "0.0.0.0:3306:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout:  5s
+      retries:  5
+      start_period: 30s
+
   dashboard:
     build: .
     container_name: vpn-dashboard
     restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
     ports:
       - "0.0.0.0:3700:3000"
     environment:
-      DB_HOST:     ${DB_HOST}
-      DB_PORT:     ${DB_PORT:-3306}
-      DB_USER:     ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_HOST:     mariadb
+      DB_PORT:     3306
+      DB_USER:     ${DB_USER:-vpnuser}
+      DB_PASSWORD: ${DB_PASSWORD:-changeme}
       DB_NAME:     ${DB_NAME:-vpn_logs}
       NEXT_PUBLIC_REFRESH_INTERVAL: ${REFRESH_INTERVAL:-30000}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+
+volumes:
+  mariadb_data:

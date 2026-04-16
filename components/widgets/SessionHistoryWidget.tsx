@@ -151,8 +151,8 @@ export default function SessionHistoryWidget() {
                 <th className="text-left py-1 px-2 font-semibold">Ansluten</th>
                 <th className="text-left py-1 px-2 font-semibold">Frånkopplad</th>
                 <th className="text-left py-1 px-2 font-semibold">Varaktighet</th>
-                <th className="text-left py-1 px-2 font-semibold">↓ Ned</th>
                 <th className="text-left py-1 px-2 font-semibold">↑ Upp</th>
+                <th className="text-left py-1 px-2 font-semibold">↓ Ned</th>
               </tr>
             </thead>
             <tbody>
@@ -267,7 +267,7 @@ function SessionChart({ data }: SessionChartProps) {
               labelFormatter={(v) => String(v).substring(0, 19)}
               formatter={(v: number, name: string) => [
                 `${Number(v).toFixed(3)} Mbit/s`,
-                name === "mbps_in" ? "↓ Ned" : "↑ Upp",
+                name === "mbps_in" ? "↑ Upp" : "↓ Ned",
               ]}
             />
             <Line
@@ -286,13 +286,13 @@ function SessionChart({ data }: SessionChartProps) {
       {/* Stats row */}
       <div className="flex gap-6 text-xs text-gray-400 border-t border-gray-700/50 pt-2">
         <div className="flex items-center gap-3">
-          <span className="text-emerald-400 font-semibold">↓ Ned</span>
+          <span className="text-emerald-400 font-semibold">↑ Upp</span>
           <span>Avg: <strong className="text-gray-200">{inStats.avg.toFixed(2)}</strong></span>
           <span>Max: <strong className="text-gray-200">{inStats.max.toFixed(2)}</strong></span>
           <span>Min: <strong className="text-gray-200">{inStats.min.toFixed(2)}</strong></span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-amber-400 font-semibold">↑ Upp</span>
+          <span className="text-amber-400 font-semibold">↓ Ned</span>
           <span>Avg: <strong className="text-gray-200">{outStats.avg.toFixed(2)}</strong></span>
           <span>Max: <strong className="text-gray-200">{outStats.max.toFixed(2)}</strong></span>
           <span>Min: <strong className="text-gray-200">{outStats.min.toFixed(2)}</strong></span>
