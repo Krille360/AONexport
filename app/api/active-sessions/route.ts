@@ -36,12 +36,12 @@ export async function GET() {
         a.client_external_ip,
         a.tunnel_type,
         a.auth_method,
-        DATE_FORMAT(a.connected_since, '%Y-%m-%dT%H:%i:%sZ') AS connected_since,
+        DATE_FORMAT(a.connected_since, '%Y-%m-%dT%H:%i:%s') AS connected_since,
         a.duration_min,
         a.total_bytes_in,
         a.total_bytes_out,
         a.user_activity_state,
-        DATE_FORMAT(a.last_seen, '%Y-%m-%dT%H:%i:%sZ') AS last_seen,
+        DATE_FORMAT(a.last_seen, '%Y-%m-%dT%H:%i:%s') AS last_seen,
         COALESCE(r.avg_bps_in,  0) AS avg_bps_in,
         COALESCE(r.avg_bps_out, 0) AS avg_bps_out
       FROM vpn_active_sessions a

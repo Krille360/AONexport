@@ -9,17 +9,20 @@ const REFRESH_MS = parseInt(
   10
 );
 
-/** Returns HH:MM only if the ISO timestamp's date portion matches dayFilter (YYYY-MM-DD). */
-function fmtTime(iso: string | null, dayFilter: string): string {
+/** Returns HH:MM. If iso is from a different day than dayFilter, prepends the date (MM-DD HH:MM). */
+function fmtFirstTime(iso: string | null, dayFilter: string): string {
   if (!iso) return "–";
-  // The date part is the first 10 chars of the ISO string (YYYY-MM-DD).
-  // We compare this to the selected day so we never show a time from a different day.
   const datepart = iso.slice(0, 10);
-  if (datepart !== dayFilter) return "–";
-  return new Date(iso).toLocaleTimeString("sv-SE", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const time = new Date(iso).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
+  if (datepart !== dayFilter) return `${datepart.slice(5)} ${time}`; // MM-DD HH:MM
+  return time;
+}
+
+/** Returns HH:MM only if the date matches dayFilter, otherwise "–". */
+function fmtLastTime(iso: string | null, dayFilter: string): string {
+  if (!iso) return "–";
+  if (iso.slice(0, 10) !== dayFilter) return "–";
+  return new Date(iso).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
 }
 
 type SortCol = "username" | "forsta_anslutning" | "senaste_aktivitet" | "max_duration_min" | "max_mb_in" | "max_mb_out";
@@ -88,7 +91,12 @@ export default function DailySummaryWidget() {
   }, [fetch_]);
 
   const days = Array.from(new Set(rows.map((r) => r.dag))).sort().reverse();
-  const base = dayFilter ? rows.filter((r) => r.dag === dayFilter) : rows;
+  // Only show rows where senaste_aktivitet falls on the selected day
+  const base = rows.filter((r) => {
+    if (dayFilter && r.dag !== dayFilter) return false;
+    if (dayFilter && r.senaste_aktivitet?.slice(0, 10) !== dayFilter) return false;
+    return true;
+  });
 
   const sorted = [...base].sort((a, b) => {
     for (const { col, dir } of sortKeys) {
@@ -106,7 +114,11 @@ export default function DailySummaryWidget() {
       }
       if (cmp !== 0) return dir === "desc" ? -cmp : cmp;
     }
-    // Implicit tiebreakers – always descending: total data → duration
+    // Implicit tiebreakers – always descending: newest last-seen → total data → duration
+    const senA = a.senaste_aktivitet ?? "";
+    const senB = b.senaste_aktivitet ?? "";
+    if (senB > senA) return 1;
+    if (senB < senA) return -1;
     const totalDiff = ((b.max_mb_in ?? 0) + (b.max_mb_out ?? 0)) - ((a.max_mb_in ?? 0) + (a.max_mb_out ?? 0));
     if (totalDiff !== 0) return totalDiff;
     return (b.max_duration_min ?? -1) - (a.max_duration_min ?? -1);
@@ -195,10 +207,10 @@ export default function DailySummaryWidget() {
                       {r.username}
                     </td>
                     <td className="py-1.5 pr-3 text-right font-mono text-gray-400">
-                      {fmtTime(r.forsta_anslutning, dayFilter)}
+                      {fmtFirstTime(r.forsta_anslutning, dayFilter)}
                     </td>
                     <td className="py-1.5 pr-3 text-right font-mono text-gray-400">
-                      {fmtTime(r.senaste_aktivitet, dayFilter)}
+                      {fmtLastTime(r.senaste_aktivitet, dayFilter)}
                     </td>
                     <td className="py-1.5 pr-3 text-right">
                       {r.max_duration_min != null

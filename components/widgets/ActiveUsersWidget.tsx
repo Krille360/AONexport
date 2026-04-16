@@ -118,11 +118,11 @@ export default function ActiveUsersWidget({
       }
       if (cmp !== 0) return dir === "desc" ? -cmp : cmp;
     }
-    // Implicit tiebreakers – always descending: total traffic → duration → speed
-    const totalDiff = (b.total_bytes_in + b.total_bytes_out) - (a.total_bytes_in + a.total_bytes_out);
-    if (totalDiff !== 0) return totalDiff;
+    // Implicit tiebreakers – always descending: duration → total traffic → speed
     const durDiff = (b.duration_min ?? -1) - (a.duration_min ?? -1);
     if (durDiff !== 0) return durDiff;
+    const totalDiff = (b.total_bytes_in + b.total_bytes_out) - (a.total_bytes_in + a.total_bytes_out);
+    if (totalDiff !== 0) return totalDiff;
     return (b.avg_bps_in + b.avg_bps_out) - (a.avg_bps_in + a.avg_bps_out);
   });
 
