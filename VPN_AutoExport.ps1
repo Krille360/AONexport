@@ -119,35 +119,17 @@ INSERT INTO vpn_session_samples (client_ip, connected_since, sampled_at, bytes_i
 VALUES $($values -join ',');
 "@
 
-    # Behåll max 20 samples per session, ta bort äldre
-    $cleanupSql = @"
-DELETE FROM vpn_session_samples
-WHERE id NOT IN (
-    SELECT id FROM (
-        SELECT id,
-               ROW_NUMBER() OVER (PARTITION BY client_ip, connected_since ORDER BY sampled_at DESC) AS rn
-        FROM vpn_session_samples
-    ) ranked
-    WHERE rn <= 20
-);
-"@
-
-    # Ta bort samples för sessioner som inte längre är aktiva
-    $pruneSql = @"
-DELETE s FROM vpn_session_samples s
-LEFT JOIN vpn_active_sessions a
-  ON a.client_ip = s.client_ip AND a.connected_since = s.connected_since
-WHERE a.client_ip IS NULL;
-"@
-
     $r = Invoke-SQL -Sql $insertSql
     if ($r.ExitCode -ne 0) {
         Write-Log "FEL: Insert-Samples misslyckades - $($r.Output)"
         return
     }
 
-    Invoke-SQL -Sql $cleanupSql | Out-Null
-    Invoke-SQL -Sql $pruneSql   | Out-Null
+    # Behåll 30 dagars historik för graferna
+    $pruneSql = @"
+DELETE FROM vpn_session_samples WHERE sampled_at < NOW() - INTERVAL 30 DAY;
+"@
+    Invoke-SQL -Sql $pruneSql | Out-Null
 }
 
 function Upsert-Sessions {

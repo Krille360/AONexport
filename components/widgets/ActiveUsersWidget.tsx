@@ -149,10 +149,10 @@ export default function ActiveUsersWidget({
       <table className="w-full text-xs text-gray-300 border-collapse">
         <thead>
           <tr className="text-gray-500 uppercase tracking-wider border-b border-gray-700 select-none">
-            {columns.map(({ col, label, align }, i) => (
+            {columns.map(({ col, label }, i) => (
               <th
                 key={i}
-                className={`pb-2 pr-3 ${align === "right" ? "text-right" : "text-left"} ${col ? "cursor-pointer hover:text-gray-300 transition-colors" : ""}`}
+                className={`pb-2 pr-3 text-left ${col ? "cursor-pointer hover:text-gray-300 transition-colors" : ""}`}
                 onClick={col ? (e) => handleSort(col, e) : undefined}
               >
                 {label}
@@ -188,11 +188,11 @@ export default function ActiveUsersWidget({
                 <td className="py-2 pr-3 font-medium text-white">{s.username}</td>
                 <td className="py-2 pr-3 font-mono">{s.client_ip}</td>
                 <td className="py-2 pr-3 font-mono text-gray-400">{s.client_external_ip ?? "–"}</td>
-                <td className="py-2 pr-3 text-right">{fmtDuration(s.duration_min)}</td>
-                <td className="py-2 pr-3 text-right text-emerald-400">{fmtBytes(s.total_bytes_in)}</td>
-                <td className="py-2 pr-3 text-right text-amber-400">{fmtBytes(s.total_bytes_out)}</td>
-                <td className="py-2 pr-3 text-right text-emerald-300">{fmtMbits(s.avg_bps_in)}</td>
-                <td className="py-2 pr-3 text-right text-amber-300">{fmtMbits(s.avg_bps_out)}</td>
+                <td className="py-2 pr-3">{fmtDuration(s.duration_min)}</td>
+                <td className="py-2 pr-3 text-emerald-400">{fmtBytes(s.total_bytes_in)}</td>
+                <td className="py-2 pr-3 text-amber-400">{fmtBytes(s.total_bytes_out)}</td>
+                <td className="py-2 pr-3 text-emerald-300">{fmtMbits(s.avg_bps_in)}</td>
+                <td className="py-2 pr-3 text-amber-300">{fmtMbits(s.avg_bps_out)}</td>
                 <td className="py-2 pr-3 text-gray-400">{s.tunnel_type ?? "–"}</td>
                 <td className="py-2"><StatusBadge state={s.user_activity_state} /></td>
               </tr>

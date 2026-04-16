@@ -167,10 +167,10 @@ export default function DailySummaryWidget() {
           <table className="w-full text-xs text-gray-300 border-collapse">
             <thead>
               <tr className="text-gray-500 uppercase tracking-wider border-b border-gray-700 sticky top-0 bg-gray-900 select-none">
-                {columns.map(({ col, label, align }, i) => (
+                {columns.map(({ col, label }, i) => (
                   <th
                     key={i}
-                    className={`pb-2 pr-3 ${align === "right" ? "text-right" : "text-left"} ${col ? "cursor-pointer hover:text-gray-300 transition-colors" : ""}`}
+                    className={`pb-2 pr-3 text-left ${col ? "cursor-pointer hover:text-gray-300 transition-colors" : ""}`}
                     onClick={col ? (e) => handleSort(col, e) : undefined}
                   >
                     {label}
@@ -206,21 +206,21 @@ export default function DailySummaryWidget() {
                     <td className="py-1.5 pr-3 font-medium text-white">
                       {r.username}
                     </td>
-                    <td className="py-1.5 pr-3 text-right font-mono text-gray-400">
+                    <td className="py-1.5 pr-3 font-mono text-gray-400">
                       {fmtFirstTime(r.forsta_anslutning, dayFilter)}
                     </td>
-                    <td className="py-1.5 pr-3 text-right font-mono text-gray-400">
+                    <td className="py-1.5 pr-3 font-mono text-gray-400">
                       {fmtLastTime(r.senaste_aktivitet, dayFilter)}
                     </td>
-                    <td className="py-1.5 pr-3 text-right">
+                    <td className="py-1.5 pr-3">
                       {r.max_duration_min != null
                         ? `${Math.floor(r.max_duration_min / 60)}t ${Math.round(r.max_duration_min % 60)}m`
                         : "–"}
                     </td>
-                    <td className="py-1.5 pr-3 text-right text-emerald-400">
+                    <td className="py-1.5 pr-3 text-emerald-400">
                       {fmtMb(r.max_mb_in)}
                     </td>
-                    <td className="py-1.5 pr-3 text-right text-amber-400">
+                    <td className="py-1.5 pr-3 text-amber-400">
                       {fmtMb(r.max_mb_out)}
                     </td>
                     <td className="py-1.5 text-gray-400">

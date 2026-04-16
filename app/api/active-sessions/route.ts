@@ -12,20 +12,29 @@ interface ActiveSessionRow extends ActiveSession {
 export async function GET() {
   try {
     const rows = await query<ActiveSessionRow>(`
-      WITH ranked AS (
+      WITH last20 AS (
+        SELECT
+          client_ip, connected_since, sampled_at, bytes_in, bytes_out,
+          ROW_NUMBER() OVER (PARTITION BY client_ip, connected_since ORDER BY sampled_at DESC) AS rn
+        FROM vpn_session_samples
+      ),
+      ranked AS (
         SELECT
           client_ip, connected_since, sampled_at, bytes_in, bytes_out,
           LAG(bytes_in)   OVER (PARTITION BY client_ip, connected_since ORDER BY sampled_at) AS prev_bytes_in,
           LAG(bytes_out)  OVER (PARTITION BY client_ip, connected_since ORDER BY sampled_at) AS prev_bytes_out,
           LAG(sampled_at) OVER (PARTITION BY client_ip, connected_since ORDER BY sampled_at) AS prev_sampled_at
-        FROM vpn_session_samples
+        FROM last20
+        WHERE rn <= 20
       ),
       rates AS (
         SELECT
           client_ip,
           connected_since,
-          AVG((bytes_in  - prev_bytes_in)  / NULLIF(UNIX_TIMESTAMP(sampled_at) - UNIX_TIMESTAMP(prev_sampled_at), 0)) AS avg_bps_in,
-          AVG((bytes_out - prev_bytes_out) / NULLIF(UNIX_TIMESTAMP(sampled_at) - UNIX_TIMESTAMP(prev_sampled_at), 0)) AS avg_bps_out
+          AVG(CASE WHEN bytes_in  >= prev_bytes_in  THEN bytes_in  - prev_bytes_in  ELSE 0 END
+              / NULLIF(UNIX_TIMESTAMP(sampled_at) - UNIX_TIMESTAMP(prev_sampled_at), 0)) AS avg_bps_in,
+          AVG(CASE WHEN bytes_out >= prev_bytes_out THEN bytes_out - prev_bytes_out ELSE 0 END
+              / NULLIF(UNIX_TIMESTAMP(sampled_at) - UNIX_TIMESTAMP(prev_sampled_at), 0)) AS avg_bps_out
         FROM ranked
         WHERE prev_bytes_in IS NOT NULL
         GROUP BY client_ip, connected_since

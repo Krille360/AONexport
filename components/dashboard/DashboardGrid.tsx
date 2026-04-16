@@ -8,7 +8,10 @@ import "react-resizable/css/styles.css";
 import StatsCardWidget    from "@/components/widgets/StatsCardWidget";
 import ActiveUsersWidget  from "@/components/widgets/ActiveUsersWidget";
 import HourlyChartWidget  from "@/components/widgets/HourlyChartWidget";
+import BandwidthChartWidget from "@/components/widgets/BandwidthChartWidget";
+import BandwidthPerUserWidget from "@/components/widgets/BandwidthPerUserWidget";
 import DailySummaryWidget from "@/components/widgets/DailySummaryWidget";
+import SessionHistoryWidget from "@/components/widgets/SessionHistoryWidget";
 import TopBandwidthWidget from "@/components/widgets/TopBandwidthWidget";
 import AnomaliesWidget    from "@/components/widgets/AnomaliesWidget";
 
@@ -18,20 +21,26 @@ const STORAGE_KEY = "vpn-dashboard-layout";
 
 const DEFAULT_LAYOUTS = {
   lg: [
-    { i: "stats",     x: 0,  y: 0, w: 4, h: 6,  minW: 3, minH: 5 },
-    { i: "anomalies", x: 4,  y: 0, w: 4, h: 6,  minW: 3, minH: 4 },
-    { i: "active",    x: 0,  y: 6, w: 12, h: 8, minW: 6, minH: 4 },
-    { i: "hourly",    x: 8,  y: 0, w: 4,  h: 6, minW: 3, minH: 4 },
-    { i: "topbw",     x: 0,  y: 14, w: 4, h: 8, minW: 3, minH: 4 },
-    { i: "daily",     x: 4,  y: 14, w: 8, h: 8, minW: 4, minH: 4 },
+    { i: "stats",     x: 0,  y: 0,  w: 4,  h: 6,  minW: 3, minH: 5 },
+    { i: "anomalies", x: 4,  y: 0,  w: 4,  h: 6,  minW: 3, minH: 4 },
+    { i: "hourly",    x: 8,  y: 0,  w: 4,  h: 6,  minW: 3, minH: 4 },
+    { i: "active",    x: 0,  y: 6,  w: 12, h: 8,  minW: 6, minH: 4 },
+    { i: "bandwidth", x: 0,  y: 14, w: 6,  h: 8,  minW: 3, minH: 4 },
+    { i: "bwperuser", x: 6,  y: 14, w: 6,  h: 8,  minW: 3, minH: 4 },
+    { i: "topbw",     x: 0,  y: 22, w: 3,  h: 8,  minW: 3, minH: 4 },
+    { i: "daily",     x: 3,  y: 22, w: 9,  h: 8,  minW: 4, minH: 4 },
+    { i: "history",   x: 0,  y: 30, w: 12, h: 10, minW: 6, minH: 5 },
   ],
   md: [
     { i: "stats",     x: 0, y: 0,  w: 5, h: 6 },
     { i: "anomalies", x: 5, y: 0,  w: 5, h: 6 },
     { i: "active",    x: 0, y: 6,  w: 10, h: 8 },
     { i: "hourly",    x: 0, y: 14, w: 4,  h: 8 },
-    { i: "topbw",     x: 4, y: 14, w: 3,  h: 8 },
-    { i: "daily",     x: 7, y: 14, w: 3,  h: 8 },
+    { i: "bandwidth", x: 4, y: 14, w: 4,  h: 8 },
+    { i: "bwperuser", x: 0, y: 22, w: 10, h: 8 },
+    { i: "topbw",     x: 0, y: 30, w: 4,  h: 8 },
+    { i: "daily",     x: 4, y: 30, w: 6,  h: 8 },
+    { i: "history",   x: 0, y: 38, w: 10, h: 10 },
   ],
 };
 
@@ -39,9 +48,12 @@ const WIDGETS = [
   { id: "stats",     label: "Översikt"        },
   { id: "anomalies", label: "Anomalier"        },
   { id: "active",    label: "Aktiva sessioner" },
-  { id: "hourly",    label: "Per timme"        },
+  { id: "hourly",    label: "Unika användare"  },
+  { id: "bandwidth", label: "Bandbredd"        },
+  { id: "bwperuser", label: "Bw Per Anv."      },
   { id: "topbw",     label: "Top Total"        },
   { id: "daily",     label: "Daglig sammanf."  },
+  { id: "history",   label: "Historik"         },
 ] as const;
 
 type WidgetId = (typeof WIDGETS)[number]["id"];
@@ -136,8 +148,11 @@ export default function DashboardGrid() {
         {!hidden.has("anomalies") && <div key="anomalies"><AnomaliesWidget /></div>}
         {!hidden.has("active")    && <div key="active"><ActiveUsersWidget /></div>}
         {!hidden.has("hourly")    && <div key="hourly"><HourlyChartWidget /></div>}
+        {!hidden.has("bandwidth") && <div key="bandwidth"><BandwidthChartWidget /></div>}
+        {!hidden.has("bwperuser") && <div key="bwperuser"><BandwidthPerUserWidget /></div>}
         {!hidden.has("topbw")     && <div key="topbw"><TopBandwidthWidget /></div>}
         {!hidden.has("daily")     && <div key="daily"><DailySummaryWidget /></div>}
+        {!hidden.has("history")   && <div key="history"><SessionHistoryWidget /></div>}
       </ResponsiveGridLayout>
     </div>
   );
