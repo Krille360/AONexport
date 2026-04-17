@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { withCache } from "@/lib/cache";
 import type { ActiveSession } from "@/lib/types";
+
+const CACHE_TTL = 25_000;
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +14,7 @@ interface ActiveSessionRow extends ActiveSession {
 
 export async function GET() {
   try {
+    const parsed = await withCache("active-sessions", CACHE_TTL, async () => {
     const rows = await query<ActiveSessionRow>(`
       WITH last20 AS (
         SELECT
@@ -58,7 +62,7 @@ export async function GET() {
       ORDER BY a.duration_min DESC
     `);
 
-    const parsed = rows.map((r) => ({
+    return rows.map((r) => ({
       ...r,
       total_bytes_in:  Number(r.total_bytes_in),
       total_bytes_out: Number(r.total_bytes_out),
@@ -66,6 +70,7 @@ export async function GET() {
       avg_bps_in:      Number(r.avg_bps_in),
       avg_bps_out:     Number(r.avg_bps_out),
     }));
+    }); // withCache
 
     return NextResponse.json(parsed);
   } catch (err) {

@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { withCache } from "@/lib/cache";
+
+const CACHE_TTL = 25_000;
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +14,7 @@ interface Row {
 function bucketExpr(durationMs: number): string {
   const h = durationMs / 3_600_000;
   if (h <= 2)   return "DATE_FORMAT(ss.sampled_at, '%Y-%m-%d %H:%i:00')"; // per minute
+  if (h <= 24)  return "DATE_FORMAT(DATE_SUB(ss.sampled_at, INTERVAL MINUTE(ss.sampled_at) MOD 5 MINUTE), '%Y-%m-%d %H:%i:00')"; // per 5 min
   if (h <= 72)  return "DATE_FORMAT(ss.sampled_at, '%Y-%m-%d %H:00:00')"; // per hour
   return               "DATE_FORMAT(ss.sampled_at, '%Y-%m-%d 00:00:00')"; // per day
 }
@@ -32,6 +36,7 @@ export async function GET(req: NextRequest) {
   const bucket = bucketExpr(durationMs);
 
   try {
+    const result = await withCache(`users-ts:${from}:${to}`, CACHE_TTL, async () => {
     const rows = await query<Row>(`
       SELECT
         ${bucket} AS bucket,
@@ -44,10 +49,12 @@ export async function GET(req: NextRequest) {
       ORDER BY bucket
     `, [from, to]);
 
-    return NextResponse.json(rows.map((r) => ({
+    return rows.map((r) => ({
       bucket:          r.bucket,
       unika_anvandare: Number(r.unika_anvandare),
-    })));
+    }));
+    }); // withCache
+    return NextResponse.json(result);
   } catch (err) {
     console.error("users-timeseries error:", err);
     return NextResponse.json({ error: "DB error" }, { status: 500 });

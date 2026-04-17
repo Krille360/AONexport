@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { withCache } from "@/lib/cache";
+
+const CACHE_TTL = 25_000;
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +24,7 @@ export async function GET(req: NextRequest) {
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "300", 10), 1000);
 
   try {
+    const result = await withCache(`session-history:${limit}`, CACHE_TTL, async () => {
     const rows = await query<Row>(`
       SELECT
         username,
@@ -39,12 +43,14 @@ export async function GET(req: NextRequest) {
       LIMIT ?
     `, [limit]);
 
-    return NextResponse.json(rows.map((r) => ({
+    return rows.map((r) => ({
       ...r,
       duration_min:    r.duration_min    != null ? Number(r.duration_min)    : null,
       total_bytes_in:  Number(r.total_bytes_in),
       total_bytes_out: Number(r.total_bytes_out),
-    })));
+    }));
+    }); // withCache
+    return NextResponse.json(result);
   } catch (err) {
     console.error("session-history error:", err);
     return NextResponse.json({ error: "DB error" }, { status: 500 });

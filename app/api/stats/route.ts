@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { withCache } from "@/lib/cache";
 import type { DashboardStats } from "@/lib/types";
+
+const CACHE_TTL = 25_000;
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    const stats = await withCache("stats", CACHE_TTL, async () => {
     const [[active], [today], [totals]] = await Promise.all([
       query<{ active_users: number }>(`
         SELECT COUNT(*) AS active_users FROM vpn_active_sessions
@@ -41,13 +45,15 @@ export async function GET() {
       `),
     ]);
 
-    const stats: DashboardStats = {
+    const result: DashboardStats = {
       active_users:     Number(active?.active_users)    ?? 0,
       total_today:      Number(today?.total_today)       ?? 0,
       avg_duration_min: Number(today?.avg_duration_min)  ?? 0,
       total_bps_in:     Number(totals?.total_bps_in)     ?? 0,
       total_bps_out:    Number(totals?.total_bps_out)    ?? 0,
     };
+    return result;
+    }); // withCache
 
     return NextResponse.json(stats);
   } catch (err) {

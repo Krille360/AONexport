@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { withCache } from "@/lib/cache";
+
+const CACHE_TTL = 25_000;
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +41,7 @@ function fmtMbits(bps: number): string {
 
 export async function GET() {
   try {
+    const anomalies = await withCache("anomalies", CACHE_TTL, async () => {
     const [activeSessions, dailySummary] = await Promise.all([
       query<{
         username: string;
@@ -80,7 +84,7 @@ export async function GET() {
       `),
     ]);
 
-    const anomalies: Anomaly[] = [];
+    const anomalyList: Anomaly[] = [];
 
     for (const s of activeSessions) {
       const durMin  = Number(s.duration_min) || 0;
@@ -93,13 +97,13 @@ export async function GET() {
 
       // Sessionstid
       if (durH >= THRESHOLDS.session_crit_h) {
-        anomalies.push({
+        anomalyList.push({
           type: "long_session", severity: "critical", username: s.username,
           value: `${Math.floor(durH)}t ${Math.round(durMin % 60)}m`,
           detail: `Aktiv session > ${THRESHOLDS.session_crit_h}h`,
         });
       } else if (durH >= THRESHOLDS.session_warn_h) {
-        anomalies.push({
+        anomalyList.push({
           type: "long_session", severity: "warning", username: s.username,
           value: `${Math.floor(durH)}t ${Math.round(durMin % 60)}m`,
           detail: `Aktiv session > ${THRESHOLDS.session_warn_h}h`,
@@ -108,13 +112,13 @@ export async function GET() {
 
       // Datamängd (aktiv session)
       if (totalGb >= THRESHOLDS.data_crit_gb) {
-        anomalies.push({
+        anomalyList.push({
           type: "high_data", severity: "critical", username: s.username,
           value: fmtBytes(totalBytes),
           detail: `Sessionstrafik > ${THRESHOLDS.data_crit_gb} GB`,
         });
       } else if (totalGb >= THRESHOLDS.data_warn_gb) {
-        anomalies.push({
+        anomalyList.push({
           type: "high_data", severity: "warning", username: s.username,
           value: fmtBytes(totalBytes),
           detail: `Sessionstrafik > ${THRESHOLDS.data_warn_gb} GB`,
@@ -123,13 +127,13 @@ export async function GET() {
 
       // Bandbredd
       if (maxMbps >= THRESHOLDS.rate_crit_mbps) {
-        anomalies.push({
+        anomalyList.push({
           type: "high_rate", severity: "critical", username: s.username,
           value: fmtMbits(Math.max(bpsIn, bpsOut)),
           detail: `Bandbredd > ${THRESHOLDS.rate_crit_mbps} Mbit/s`,
         });
       } else if (maxMbps >= THRESHOLDS.rate_warn_mbps) {
-        anomalies.push({
+        anomalyList.push({
           type: "high_rate", severity: "warning", username: s.username,
           value: fmtMbits(Math.max(bpsIn, bpsOut)),
           detail: `Bandbredd > ${THRESHOLDS.rate_warn_mbps} Mbit/s`,
@@ -141,13 +145,13 @@ export async function GET() {
     for (const d of dailySummary) {
       const totalGb = Number(d.total_mb) / 1_024;
       if (totalGb >= THRESHOLDS.daily_crit_gb) {
-        anomalies.push({
+        anomalyList.push({
           type: "high_data", severity: "critical", username: d.username,
           value: `${totalGb.toFixed(1)} GB idag`,
           detail: `Daglig trafik > ${THRESHOLDS.daily_crit_gb} GB`,
         });
       } else if (totalGb >= THRESHOLDS.daily_warn_gb) {
-        anomalies.push({
+        anomalyList.push({
           type: "high_data", severity: "warning", username: d.username,
           value: `${totalGb.toFixed(1)} GB idag`,
           detail: `Daglig trafik > ${THRESHOLDS.daily_warn_gb} GB`,
@@ -156,10 +160,13 @@ export async function GET() {
     }
 
     // Sortera: critical först, sedan per typ
-    anomalies.sort((a, b) => {
+    anomalyList.sort((a, b) => {
       if (a.severity !== b.severity) return a.severity === "critical" ? -1 : 1;
       return a.username.localeCompare(b.username);
     });
+
+    return anomalyList;
+    }); // withCache
 
     return NextResponse.json(anomalies);
   } catch (err) {
