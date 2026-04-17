@@ -192,7 +192,8 @@ function Export-VPNSessions {
     # Bygg en mängd med nuvarande session-nycklar
     $nuvarandeNycklar = @{}
     foreach ($s in $sessioner) {
-        $nyckel = "$($s.ClientIPv4Address)|$($s.ConnectionStartTime.ToString('o'))"
+    # Nyckel matchar DB:s UNIQUE KEY (client_ip, connected_since) — trunkerat till sekund
+        $nyckel = "$($s.ClientIPv4Address)|$($s.ConnectionStartTime.ToString('yyyy-MM-dd HH:mm:ss'))"
         $nuvarandeNycklar[$nyckel] = $s
     }
 

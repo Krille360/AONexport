@@ -33,6 +33,7 @@ export async function GET() {
             LAG(ss.sampled_at) OVER (PARTITION BY ss.client_ip, ss.connected_since ORDER BY ss.sampled_at) AS prev_sampled_at
           FROM vpn_session_samples ss
           INNER JOIN active_sets a ON a.client_ip = ss.client_ip AND a.connected_since = ss.connected_since
+          WHERE ss.sampled_at >= NOW() - INTERVAL 3 MINUTE
         ),
         rates AS (
           SELECT

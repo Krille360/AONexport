@@ -44,6 +44,7 @@ function buildRatesCTE(filterClause: string): string {
       ROW_NUMBER() OVER (PARTITION BY ss.client_ip, ss.connected_since ORDER BY ss.sampled_at DESC) AS rn
     FROM vpn_session_samples ss
     INNER JOIN active_filter af ON af.client_ip = ss.client_ip AND af.connected_since = ss.connected_since
+    WHERE ss.sampled_at >= NOW() - INTERVAL 3 MINUTE
   ),
   ranked_rates AS (
     SELECT client_ip, connected_since, sampled_at, bytes_in, bytes_out,

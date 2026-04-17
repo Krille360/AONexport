@@ -11,12 +11,17 @@ interface Row {
   unika_anvandare: string | number;
 }
 
-function bucketExpr(durationMs: number): string {
+interface BucketCfg {
+  interval: string;   // SQL INTERVAL literal, e.g. '5 MINUTE'
+  fmt:      string;   // DATE_FORMAT pattern
+}
+
+function bucketCfg(durationMs: number): BucketCfg {
   const h = durationMs / 3_600_000;
-  if (h <= 2)   return "DATE_FORMAT(ss.sampled_at, '%Y-%m-%d %H:%i:00')"; // per minute
-  if (h <= 24)  return "DATE_FORMAT(DATE_SUB(ss.sampled_at, INTERVAL MINUTE(ss.sampled_at) MOD 5 MINUTE), '%Y-%m-%d %H:%i:00')"; // per 5 min
-  if (h <= 72)  return "DATE_FORMAT(ss.sampled_at, '%Y-%m-%d %H:00:00')"; // per hour
-  return               "DATE_FORMAT(ss.sampled_at, '%Y-%m-%d 00:00:00')"; // per day
+  if (h <= 2)  return { interval: "1 MINUTE",  fmt: "'%Y-%m-%d %H:%i:00'" };
+  if (h <= 24) return { interval: "5 MINUTE",  fmt: "'%Y-%m-%d %H:%i:00'" };
+  if (h <= 72) return { interval: "1 HOUR",    fmt: "'%Y-%m-%d %H:00:00'" };
+  return             { interval: "1 DAY",     fmt: "'%Y-%m-%d 00:00:00'" };
 }
 
 export async function GET(req: NextRequest) {
@@ -33,26 +38,42 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "to must be after from" }, { status: 400 });
   }
 
-  const bucket = bucketExpr(durationMs);
+  const { interval, fmt } = bucketCfg(durationMs);
 
   try {
     const result = await withCache(`users-ts:${from}:${to}`, CACHE_TTL, async () => {
-    const rows = await query<Row>(`
-      SELECT
-        ${bucket} AS bucket,
-        COUNT(DISTINCT s.username) AS unika_anvandare
-      FROM vpn_session_samples ss
-      JOIN vpn_sessions s
-        ON s.client_ip = ss.client_ip AND s.connected_since = ss.connected_since
-      WHERE ss.sampled_at BETWEEN ? AND ?
-      GROUP BY bucket
-      ORDER BY bucket
-    `, [from, to]);
+      // relevant_sessions CTE pre-filters using idx_last_seen / idx_first_seen
+      // before the recursive CTE join — avoids full table scan issues with
+      // MariaDB's optimizer when joining against recursive CTEs.
+      const rows = await query<Row>(`
+        WITH RECURSIVE buckets AS (
+          SELECT CAST(? AS DATETIME) AS t
+          UNION ALL
+          SELECT t + INTERVAL ${interval}
+          FROM buckets
+          WHERE t + INTERVAL ${interval} <= CAST(? AS DATETIME)
+        ),
+        relevant_sessions AS (
+          SELECT username, connected_since, last_seen
+          FROM vpn_sessions
+          WHERE last_seen     >= CAST(? AS DATETIME)
+            AND connected_since < CAST(? AS DATETIME)
+        )
+        SELECT
+          DATE_FORMAT(b.t, ${fmt}) AS bucket,
+          COUNT(DISTINCT s.username) AS unika_anvandare
+        FROM buckets b
+        LEFT JOIN relevant_sessions s
+          ON  s.connected_since <  b.t + INTERVAL ${interval}
+          AND s.last_seen        >= b.t
+        GROUP BY b.t
+        ORDER BY b.t
+      `, [from, to, from, to]);
 
-    return rows.map((r) => ({
-      bucket:          r.bucket,
-      unika_anvandare: Number(r.unika_anvandare),
-    }));
+      return rows.map((r) => ({
+        bucket:          r.bucket,
+        unika_anvandare: Number(r.unika_anvandare),
+      }));
     }); // withCache
     return NextResponse.json(result);
   } catch (err) {

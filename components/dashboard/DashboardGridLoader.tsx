@@ -4,6 +4,6 @@ import dynamic from "next/dynamic";
 
 const DashboardGrid = dynamic(() => import("./DashboardGrid"), { ssr: false });
 
-export default function DashboardGridLoader() {
-  return <DashboardGrid />;
+export default function DashboardGridLoader({ username }: { username: string | null }) {
+  return <DashboardGrid username={username} />;
 }

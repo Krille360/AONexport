@@ -10,15 +10,17 @@ const REFRESH_MS = parseInt(
 );
 
 const TYPE_LABEL: Record<AnomalyType, string> = {
-  long_session: "Lång session",
-  high_data:    "Hög datamängd",
-  high_rate:    "Hög bandbredd",
+  long_session:     "Lång session",
+  high_data:        "Hög datamängd",
+  high_rate:        "Hög bandbredd",
+  rapid_reconnect:  "Återanslutningar",
 };
 
 const TYPE_ICON: Record<AnomalyType, string> = {
-  long_session: "⏱",
-  high_data:    "📦",
-  high_rate:    "⚡",
+  long_session:     "⏱",
+  high_data:        "📦",
+  high_rate:        "⚡",
+  rapid_reconnect:  "🔄",
 };
 
 export default function AnomaliesWidget() {

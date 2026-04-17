@@ -23,6 +23,7 @@ export async function GET() {
         FROM vpn_session_samples ss
         INNER JOIN vpn_active_sessions act
           ON act.client_ip = ss.client_ip AND act.connected_since = ss.connected_since
+        WHERE ss.sampled_at >= NOW() - INTERVAL 3 MINUTE
       ),
       ranked AS (
         SELECT

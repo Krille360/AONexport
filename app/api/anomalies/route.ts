@@ -7,7 +7,7 @@ const CACHE_TTL = 25_000;
 export const dynamic = "force-dynamic";
 
 export type AnomalySeverity = "warning" | "critical";
-export type AnomalyType     = "long_session" | "high_data" | "high_rate";
+export type AnomalyType     = "long_session" | "high_data" | "high_rate" | "rapid_reconnect";
 
 export interface Anomaly {
   type:     AnomalyType;
@@ -19,14 +19,17 @@ export interface Anomaly {
 
 // Tröskelvärden
 const THRESHOLDS = {
-  session_warn_h:    8,    // timmar
-  session_crit_h:   24,
-  data_warn_gb:      5,    // GB totalt (in+out) per aktiv session
-  data_crit_gb:     20,
-  daily_warn_gb:    10,    // GB totalt i daglig sammanfattning
-  daily_crit_gb:    50,
-  rate_warn_mbps:   50,    // Mbit/s genomsnitt
-  rate_crit_mbps:  200,
+  session_warn_h:       8,    // timmar
+  session_crit_h:      24,
+  data_warn_gb:         5,    // GB totalt (in+out) per aktiv session
+  data_crit_gb:        20,
+  daily_warn_gb:       10,    // GB totalt i daglig sammanfattning
+  daily_crit_gb:       50,
+  rate_warn_mbps:      50,    // Mbit/s genomsnitt
+  rate_crit_mbps:     200,
+  reconnect_warn_cnt:   3,    // antal sessioner senaste timmen
+  reconnect_crit_cnt:   6,
+  reconnect_window_h:   1,    // tidsperiod i timmar
 };
 
 function fmtBytes(bytes: number): string {
@@ -42,7 +45,7 @@ function fmtMbits(bps: number): string {
 export async function GET() {
   try {
     const anomalies = await withCache("anomalies", CACHE_TTL, async () => {
-    const [activeSessions, dailySummary] = await Promise.all([
+    const [activeSessions, dailySummary, reconnectStats] = await Promise.all([
       query<{
         username: string;
         duration_min: number | null;
@@ -59,6 +62,7 @@ export async function GET() {
           FROM vpn_session_samples ss
           INNER JOIN vpn_active_sessions act
             ON act.client_ip = ss.client_ip AND act.connected_since = ss.connected_since
+          WHERE ss.sampled_at >= NOW() - INTERVAL 3 MINUTE
         ),
         rates AS (
           SELECT client_ip, connected_since,
@@ -85,6 +89,13 @@ export async function GET() {
         WHERE dag = CURDATE()
           AND forsta_anslutning >= CURDATE()
         GROUP BY username
+      `),
+      query<{ username: string; session_count: number }>(`
+        SELECT username, COUNT(*) AS session_count
+        FROM vpn_sessions
+        WHERE connected_since >= NOW() - INTERVAL ${THRESHOLDS.reconnect_window_h} HOUR
+        GROUP BY username
+        HAVING COUNT(*) >= ${THRESHOLDS.reconnect_warn_cnt}
       `),
     ]);
 
@@ -161,6 +172,19 @@ export async function GET() {
           detail: `Daglig trafik > ${THRESHOLDS.daily_warn_gb} GB`,
         });
       }
+    }
+
+    // Snabba återanslutningar
+    for (const r of reconnectStats) {
+      const cnt = Number(r.session_count);
+      const severity: AnomalySeverity = cnt >= THRESHOLDS.reconnect_crit_cnt ? "critical" : "warning";
+      anomalyList.push({
+        type: "rapid_reconnect",
+        severity,
+        username: r.username,
+        value: `${cnt} sessioner / ${THRESHOLDS.reconnect_window_h}h`,
+        detail: `Fler än ${severity === "critical" ? THRESHOLDS.reconnect_crit_cnt : THRESHOLDS.reconnect_warn_cnt} sessioner senaste timmen`,
+      });
     }
 
     // Sortera: critical först, sedan per typ

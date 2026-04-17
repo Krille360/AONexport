@@ -48,8 +48,8 @@ CREATE TABLE IF NOT EXISTS vpn_session_samples (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
--- Aktiva sessioner: senast sedd inom 2 minuter.
--- Enkel WHERE-filtrering, ingen korrelerad subquery.
+-- Aktiva sessioner: senast sedd inom 2 minuter, deduplicerad per (username, client_ip).
+-- Vid variationer i connected_since visas enbart den senaste raden.
 CREATE OR REPLACE VIEW vpn_active_sessions AS
 SELECT
     username,
@@ -63,8 +63,27 @@ SELECT
     total_bytes_out,
     user_activity_state,
     last_seen
-FROM vpn_sessions
-WHERE last_seen >= NOW() - INTERVAL 2 MINUTE;
+FROM (
+    SELECT
+        username,
+        client_ip,
+        client_external_ip,
+        tunnel_type,
+        auth_method,
+        connected_since,
+        duration_min,
+        total_bytes_in,
+        total_bytes_out,
+        user_activity_state,
+        last_seen,
+        ROW_NUMBER() OVER (
+            PARTITION BY client_ip, username
+            ORDER BY last_seen DESC, total_bytes_in DESC
+        ) AS rn
+    FROM vpn_sessions
+    WHERE last_seen >= NOW() - INTERVAL 2 MINUTE
+) deduped
+WHERE rn = 1;
 
 
 -- Daglig sammanfattning per användare.
@@ -105,3 +124,28 @@ JOIN all_hours ah
 WHERE s.first_seen >= NOW() - INTERVAL 7 DAY
 GROUP BY DATE(s.first_seen), ah.h
 ORDER BY dag, timme;
+
+
+-- Personliga layoutinställningar per användare (identifierad via Nexus DA X-Remote-User).
+-- layouts: JSON med react-grid-layout-format per breakpoint (lg/md).
+-- hidden_widgets: JSON-array med widget-id:n som ska döljas.
+CREATE TABLE IF NOT EXISTS vpn_user_prefs (
+    username        VARCHAR(255) NOT NULL PRIMARY KEY,
+    layouts         LONGTEXT     NOT NULL,
+    hidden_widgets  LONGTEXT     NOT NULL DEFAULT '[]',
+    updated_at      DATETIME     NOT NULL DEFAULT NOW() ON UPDATE NOW()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- Namngivna layoutprofiler per användare. Ersätter vpn_user_prefs.
+-- En rad per profil; is_active=1 markerar den aktiva profilen.
+CREATE TABLE IF NOT EXISTS vpn_user_layouts (
+    username        VARCHAR(255) NOT NULL,
+    profile_name    VARCHAR(100) NOT NULL,
+    is_active       TINYINT(1)   NOT NULL DEFAULT 0,
+    layouts         LONGTEXT     NOT NULL,
+    hidden_widgets  LONGTEXT     NOT NULL DEFAULT '[]',
+    updated_at      DATETIME     NOT NULL DEFAULT NOW() ON UPDATE NOW(),
+    PRIMARY KEY (username, profile_name),
+    INDEX idx_ul_username (username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
