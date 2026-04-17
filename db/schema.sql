@@ -43,7 +43,8 @@ CREATE TABLE IF NOT EXISTS vpn_session_samples (
     sampled_at      DATETIME        NOT NULL,
     bytes_in        BIGINT UNSIGNED NOT NULL DEFAULT 0,
     bytes_out       BIGINT UNSIGNED NOT NULL DEFAULT 0,
-    INDEX idx_session (client_ip, connected_since, sampled_at)
+    INDEX idx_session   (client_ip, connected_since, sampled_at),
+    INDEX idx_sampled_at (sampled_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 

@@ -52,16 +52,20 @@ export async function GET() {
         avg_bps_out: number;
       }>(`
         WITH ranked AS (
-          SELECT client_ip, connected_since, sampled_at, bytes_in, bytes_out,
-            LAG(bytes_in)   OVER (PARTITION BY client_ip, connected_since ORDER BY sampled_at) AS prev_bytes_in,
-            LAG(bytes_out)  OVER (PARTITION BY client_ip, connected_since ORDER BY sampled_at) AS prev_bytes_out,
-            LAG(sampled_at) OVER (PARTITION BY client_ip, connected_since ORDER BY sampled_at) AS prev_sampled_at
-          FROM vpn_session_samples
+          SELECT ss.client_ip, ss.connected_since, ss.sampled_at, ss.bytes_in, ss.bytes_out,
+            LAG(ss.bytes_in)   OVER (PARTITION BY ss.client_ip, ss.connected_since ORDER BY ss.sampled_at) AS prev_bytes_in,
+            LAG(ss.bytes_out)  OVER (PARTITION BY ss.client_ip, ss.connected_since ORDER BY ss.sampled_at) AS prev_bytes_out,
+            LAG(ss.sampled_at) OVER (PARTITION BY ss.client_ip, ss.connected_since ORDER BY ss.sampled_at) AS prev_sampled_at
+          FROM vpn_session_samples ss
+          INNER JOIN vpn_active_sessions act
+            ON act.client_ip = ss.client_ip AND act.connected_since = ss.connected_since
         ),
         rates AS (
           SELECT client_ip, connected_since,
-            AVG((bytes_in  - prev_bytes_in)  / NULLIF(UNIX_TIMESTAMP(sampled_at) - UNIX_TIMESTAMP(prev_sampled_at), 0)) AS avg_bps_in,
-            AVG((bytes_out - prev_bytes_out) / NULLIF(UNIX_TIMESTAMP(sampled_at) - UNIX_TIMESTAMP(prev_sampled_at), 0)) AS avg_bps_out
+            AVG(CASE WHEN bytes_in  >= prev_bytes_in  THEN bytes_in  - prev_bytes_in  ELSE 0 END
+                / NULLIF(UNIX_TIMESTAMP(sampled_at) - UNIX_TIMESTAMP(prev_sampled_at), 0)) AS avg_bps_in,
+            AVG(CASE WHEN bytes_out >= prev_bytes_out THEN bytes_out - prev_bytes_out ELSE 0 END
+                / NULLIF(UNIX_TIMESTAMP(sampled_at) - UNIX_TIMESTAMP(prev_sampled_at), 0)) AS avg_bps_out
           FROM ranked WHERE prev_bytes_in IS NOT NULL
           GROUP BY client_ip, connected_since
         )

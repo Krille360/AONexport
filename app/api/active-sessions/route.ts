@@ -18,9 +18,11 @@ export async function GET() {
     const rows = await query<ActiveSessionRow>(`
       WITH last20 AS (
         SELECT
-          client_ip, connected_since, sampled_at, bytes_in, bytes_out,
-          ROW_NUMBER() OVER (PARTITION BY client_ip, connected_since ORDER BY sampled_at DESC) AS rn
-        FROM vpn_session_samples
+          ss.client_ip, ss.connected_since, ss.sampled_at, ss.bytes_in, ss.bytes_out,
+          ROW_NUMBER() OVER (PARTITION BY ss.client_ip, ss.connected_since ORDER BY ss.sampled_at DESC) AS rn
+        FROM vpn_session_samples ss
+        INNER JOIN vpn_active_sessions act
+          ON act.client_ip = ss.client_ip AND act.connected_since = ss.connected_since
       ),
       ranked AS (
         SELECT
