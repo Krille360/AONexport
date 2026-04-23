@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import WidgetShell from "./WidgetShell";
+import { formatUsername } from "@/lib/types";
 import type { Anomaly, AnomalyType } from "@/app/api/anomalies/route";
 
 const REFRESH_MS = parseInt(
@@ -90,8 +91,8 @@ export default function AnomaliesWidget() {
               {/* Content */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-xs font-semibold text-white truncate">
-                    {a.username}
+                  <span className="text-xs font-semibold text-white truncate" title={a.username}>
+                    {formatUsername(a.username)}
                   </span>
                   <span className={`text-xs font-mono shrink-0 ${
                     a.severity === "critical" ? "text-red-400" : "text-amber-400"

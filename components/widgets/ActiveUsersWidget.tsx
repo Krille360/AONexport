@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import WidgetShell from "./WidgetShell";
+import { formatUsername } from "@/lib/types";
 import type { ActiveSession } from "@/lib/types";
 
 const REFRESH_MS = parseInt(
@@ -185,7 +186,7 @@ export default function ActiveUsersWidget({
                   i % 2 === 0 ? "" : "bg-gray-800/20"
                 }`}
               >
-                <td className="py-2 pr-3 font-medium text-white">{s.username}</td>
+                <td className="py-2 pr-3 font-medium text-white" title={s.username}>{formatUsername(s.username)}</td>
                 <td className="py-2 pr-3 font-mono">{s.client_ip}</td>
                 <td className="py-2 pr-3 font-mono text-gray-400">{s.client_external_ip ?? "–"}</td>
                 <td className="py-2 pr-3">{fmtDuration(s.duration_min)}</td>

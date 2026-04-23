@@ -6,6 +6,7 @@ import {
   Tooltip, ResponsiveContainer,
 } from "recharts";
 import WidgetShell from "./WidgetShell";
+import { formatUsername } from "@/lib/types";
 import TimeRangeSelector, { getPresetDates, toLocalSQL, type RangePreset } from "./TimeRangeSelector";
 
 const REFRESH_MS = parseInt(
@@ -47,8 +48,7 @@ function fmtLabel(bucket: string): string {
 }
 
 function shortUser(u: string): string {
-  // show only the part before @ if email
-  return u.includes("@") ? u.split("@")[0] : u;
+  return formatUsername(u);
 }
 
 // ─── Custom tooltip ───────────────────────────────────────────────────────────

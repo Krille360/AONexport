@@ -12,6 +12,7 @@ import {
   Cell,
 } from "recharts";
 import WidgetShell from "./WidgetShell";
+import { formatUsername } from "@/lib/types";
 import type { ActiveSession } from "@/lib/types";
 
 const REFRESH_MS = parseInt(
@@ -59,7 +60,7 @@ export default function TopBandwidthWidget() {
   }, [fetch_]);
 
   const chartData = data.map((s) => ({
-    name: s.username,
+    name: formatUsername(s.username),
     mb_in:  Math.round(s.total_bytes_in  / 1_048_576 * 10) / 10,
     mb_out: Math.round(s.total_bytes_out / 1_048_576 * 10) / 10,
   }));

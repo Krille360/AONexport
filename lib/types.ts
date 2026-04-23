@@ -1,3 +1,21 @@
+/**
+ * Converts an email-style username to a display name.
+ * "namn.efternamn@domain.se"         → "Namn Efternamn"
+ * "namn.efternamn-efternamn2@domain" → "Namn Efternamn-Efternamn2"
+ */
+export function formatUsername(username: string): string {
+  const local = username.includes("@") ? username.split("@")[0] : username;
+  return local
+    .split(".")
+    .map((word) =>
+      word
+        .split("-")
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+        .join("-")
+    )
+    .join(" ");
+}
+
 export interface ActiveSession {
   username:            string;
   client_ip:           string;

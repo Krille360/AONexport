@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # AlwaysON VPN - Automatisk sessionsloggning till MariaDB
 # Spara som: C:\Scripts\VPN_AutoExport.ps1
 # ============================================================
@@ -10,8 +10,8 @@ $MySqlExe    = "C:\Program Files\MySQL\MySQL Workbench 8.0\mysql.exe"
 # Heartbeat-logg var N:e cykel (5 sek * 60 = 5 min)
 $HeartbeatIntervallCykler = 60
 
-# Städning av föråldrade sessioner var N:e cykel (5 sek * 720 = 1 timme)
-$StadningIntervallCykler = 720
+# Städning av föråldrade sessioner körs varje cykel för att snabbt fånga
+# spökessioner (t.ex. vid reconnect där klienten fått ny IP).
 
 # -- MariaDB-anslutning --
 $DbHost = "10.181.111.50"
@@ -145,7 +145,7 @@ function Upsert-Sessions {
         $tunnelType  = Escape-SQL ("$($s.TunnelType)")
         $authMethod  = Escape-SQL ("$($s.AuthMethod)")
         $clientIp    = Escape-SQL $s.ClientIPv4Address.ToString()
-        $clientExtIp = Escape-SQL (if ($s.ClientExternalAddress) { $s.ClientExternalAddress.ToString() } else { "" })
+        $clientExtIp = Escape-SQL $(if ($s.ClientExternalAddress) { $s.ClientExternalAddress.ToString() } else { "" })
         $connSince   = $s.ConnectionStartTime.ToString("yyyy-MM-dd HH:mm:ss")
         $durMin      = [math]::Round($s.ConnectionDuration / 60, 1)
         $bwKbps      = [math]::Round($s.Bandwidth / 1000, 1)
@@ -274,10 +274,9 @@ function Export-VPNSessions {
         Write-Log "HEARTBEAT: $($sessioner.Count) aktiv(a) session(er)"
     }
 
-    # Timvis städning: stäng sessioner i DB som inte längre är aktiva på servern
-    if ($script:CykelRaknare % $StadningIntervallCykler -eq 0) {
-        Close-StaleSessions -AktivaSessioner $sessioner
-    }
+    # Stäng sessioner i DB som inte längre är aktiva på servern (varje cykel).
+    # Det håller vpn_active_sessions synkad vid reconnect/IP-byten.
+    Close-StaleSessions -AktivaSessioner $sessioner
 }
 
 # -- Testa anslutning --

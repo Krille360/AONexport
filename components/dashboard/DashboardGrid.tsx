@@ -184,7 +184,7 @@ export default function DashboardGrid({ username }: { username: string | null })
 
   // Ta bort aktiv profil
   const deleteProfile = async () => {
-    if (!activeProfile || profiles.length <= 1) return;
+    if (!activeProfile || activeProfile === "Standard" || profiles.length <= 1) return;
     try {
       const res  = await fetch("/api/layout", {
         method:  "POST",
@@ -290,7 +290,7 @@ export default function DashboardGrid({ username }: { username: string | null })
               </button>
             )}
 
-            {activeProfile && profiles.length > 1 && (
+            {activeProfile && activeProfile !== "Standard" && profiles.length > 1 && (
               <button
                 onClick={deleteProfile}
                 className="px-2 py-1 rounded text-xs bg-gray-800 text-red-500/70 hover:text-red-400 hover:bg-gray-700 transition-colors"
@@ -340,6 +340,8 @@ export default function DashboardGrid({ username }: { username: string | null })
         margin={[10, 10]}
         containerPadding={[12, 12]}
         resizeHandles={["se", "s", "e"]}
+        compactType={null}
+        preventCollision={true}
       >
         {!hidden.has("stats")     && <div key="stats"><StatsCardWidget /></div>}
         {!hidden.has("anomalies") && <div key="anomalies"><AnomaliesWidget /></div>}

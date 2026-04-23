@@ -6,6 +6,7 @@ import {
   Tooltip, ResponsiveContainer,
 } from "recharts";
 import WidgetShell from "./WidgetShell";
+import { formatUsername } from "@/lib/types";
 
 const REFRESH_MS = parseInt(
   process.env.NEXT_PUBLIC_REFRESH_INTERVAL ?? "30000",
@@ -45,12 +46,8 @@ function fmtDur(min: number | null): string {
 }
 
 function fmtDateTime(iso: string): string {
-  // "YYYY-MM-DDTHH:MM:SS" → "MM-DD HH:MM"
-  return iso.substring(5, 16).replace("T", " ");
-}
-
-function fmtTime(iso: string): string {
-  return iso.substring(11, 16);
+  // "YYYY-MM-DDTHH:MM:SS" → "YYYY-MM-DD HH:MM"
+  return iso.substring(0, 16).replace("T", " ");
 }
 
 export default function SessionHistoryWidget() {
@@ -117,13 +114,20 @@ export default function SessionHistoryWidget() {
     }
   };
 
-  const filtered = filter.trim()
-    ? sessions.filter((s) =>
-        s.username.toLowerCase().includes(filter.toLowerCase()) ||
-        s.client_ip.includes(filter) ||
-        s.client_external_ip.includes(filter)
-      )
-    : sessions;
+  const filtered = (filter.trim()
+    ? sessions.filter((s) => {
+        const f = filter.trim().toLowerCase();
+        const u = s.username.toLowerCase();
+        // Word-boundary matching: start of segment separated by ".", "-" or space
+        const matchesUser =
+          u.startsWith(f) ||
+          u.includes(`.${f}`) ||
+          u.includes(`-${f}`) ||
+          formatUsername(s.username).toLowerCase().split(" ").some((part) => part.startsWith(f));
+        return matchesUser || s.client_ip.includes(f) || s.client_external_ip.toLowerCase().includes(f);
+      })
+    : [...sessions]
+  ).sort((a, b) => (b.last_seen > a.last_seen ? 1 : b.last_seen < a.last_seen ? -1 : 0));
 
   return (
     <WidgetShell
@@ -173,10 +177,10 @@ export default function SessionHistoryWidget() {
                           : "hover:bg-gray-800/50"
                       }`}
                     >
-                      <td className="py-1 px-2 max-w-[140px] truncate">{s.username}</td>
+                      <td className="py-1 px-2 max-w-[140px] truncate" title={s.username}>{formatUsername(s.username)}</td>
                       <td className="py-1 px-2 font-mono">{s.client_ip}</td>
                       <td className="py-1 px-2">{fmtDateTime(s.connected_since)}</td>
-                      <td className="py-1 px-2">{fmtTime(s.last_seen)}</td>
+                      <td className="py-1 px-2">{fmtDateTime(s.last_seen)}</td>
                       <td className="py-1 px-2">{fmtDur(s.duration_min)}</td>
                       <td className="py-1 px-2 text-emerald-400">{fmtBytes(s.total_bytes_in)}</td>
                       <td className="py-1 px-2 text-amber-400">{fmtBytes(s.total_bytes_out)}</td>

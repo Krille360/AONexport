@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import WidgetShell from "./WidgetShell";
+import { formatUsername } from "@/lib/types";
 import type { DailySummary } from "@/lib/types";
 
 const REFRESH_MS = parseInt(
@@ -127,8 +128,8 @@ export default function DailySummaryWidget() {
   type ColDef = { col: SortCol | null; label: string; align: "left" | "right" };
   const columns: ColDef[] = [
     { col: "username",           label: "Användare", align: "left"  },
-    { col: "forsta_anslutning",  label: "Första",    align: "right" },
-    { col: "senaste_aktivitet",  label: "Senaste",   align: "right" },
+    { col: "forsta_anslutning",  label: "Ansluten sedan", align: "right" },
+    { col: "senaste_aktivitet",  label: "Senast sedd",  align: "right" },
     { col: "max_duration_min",   label: "Max tid",   align: "right" },
     { col: "max_mb_in",          label: "↑ Upp",     align: "right" },
     { col: "max_mb_out",         label: "↓ Ned",     align: "right" },
@@ -203,8 +204,8 @@ export default function DailySummaryWidget() {
                       i % 2 === 0 ? "" : "bg-gray-800/20"
                     }`}
                   >
-                    <td className="py-1.5 pr-3 font-medium text-white">
-                      {r.username}
+                    <td className="py-1.5 pr-3 font-medium text-white" title={r.username}>
+                      {formatUsername(r.username)}
                     </td>
                     <td className="py-1.5 pr-3 font-mono text-gray-400">
                       {fmtFirstTime(r.forsta_anslutning, dayFilter)}

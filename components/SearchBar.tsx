@@ -8,6 +8,8 @@ import {
   Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 
+import { formatUsername } from "@/lib/types";
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface SearchResult { users: string[]; ips: string[] }
@@ -153,7 +155,7 @@ function SessionRow({
         onClick={onToggle}
       >
         {searchType === "ip" && (
-          <td className="py-1.5 px-3 text-gray-200 text-xs">{s.username}</td>
+          <td className="py-1.5 px-3 text-gray-200 text-xs">{formatUsername(s.username)}</td>
         )}
         {searchType === "user" && (
           <td className="py-1.5 px-3 text-gray-300 text-xs font-mono">{s.client_ip}</td>
@@ -264,11 +266,24 @@ function UserSessionsModal({
       <div className="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-5xl max-h-[85vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700 shrink-0">
-          <div>
-            <span className="text-xs text-gray-500 uppercase tracking-wide mr-2">
-              {type === "user" ? "Användare" : "IP-adress"}
-            </span>
-            <span className="text-white font-mono font-semibold">{value}</span>
+          <div className="flex flex-col gap-0.5">
+            {type === "user" ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 uppercase tracking-wide w-16 shrink-0">Användare</span>
+                  <span className="text-white font-semibold">{formatUsername(value)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 uppercase tracking-wide w-16 shrink-0">Epost</span>
+                  <span className="text-xs text-gray-400 font-mono">{value}</span>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 uppercase tracking-wide mr-2">IP-adress</span>
+                <span className="text-white font-semibold font-mono">{value}</span>
+              </div>
+            )}
           </div>
           <button
             onClick={onClose}
@@ -459,7 +474,10 @@ export default function SearchBar() {
                     className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-gray-700 flex items-center gap-2"
                   >
                     <span className="text-blue-400 text-xs">👤</span>
-                    {u}
+                    <span className="flex flex-col leading-tight">
+                      <span>{formatUsername(u)}</span>
+                      <span className="text-xs text-gray-500 font-mono">{u}</span>
+                    </span>
                   </button>
                 ))}
               </div>
