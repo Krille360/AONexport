@@ -79,7 +79,7 @@ export default function DashboardGrid({ username }: { username: string | null })
   const saveTimerRef                        = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeProfileRef                    = useRef<string | null>(null);
   const [currentBp, setCurrentBp]           = useState<"lg" | "md">("lg");
-  const preDragRef                          = useRef<{ bpLayout: typeof DEFAULT_LAYOUTS["lg"]; draggedId: string } | null>(null);
+  const preDragRef                          = useRef<{ bpLayout: { i: string; x: number; y: number; w: number; h: number }[]; draggedId: string } | null>(null);
 
   useEffect(() => { activeProfileRef.current = activeProfile; }, [activeProfile]);
 
@@ -165,7 +165,7 @@ export default function DashboardGrid({ username }: { username: string | null })
   // till där det dragna objektet startade (byte av plats)
   const handleDragStop = useCallback(
     (
-      layout: typeof DEFAULT_LAYOUTS["lg"],
+      layout: { i: string; x: number; y: number; w: number; h: number }[],
       _old: unknown,
       newItem: { i: string; x: number; y: number }
     ) => {
