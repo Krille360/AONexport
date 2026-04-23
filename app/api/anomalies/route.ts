@@ -187,10 +187,21 @@ export async function GET() {
       });
     }
 
-    // Sortera: critical först, sedan per typ
+    // Sortera med weight-system:
+    // Prioritet per typ (högst = visas överst): high_rate > rapid_reconnect > high_data > long_session
+    // Inom varje typ: critical (2) före warning (1), sedan fallande numeriskt värde
+    const TYPE_WEIGHT: Record<AnomalyType, number> = {
+      high_rate:       4,
+      rapid_reconnect: 3,
+      high_data:       2,
+      long_session:    1,
+    };
+    const SEVERITY_WEIGHT: Record<AnomalySeverity, number> = { critical: 2, warning: 1 };
+
     anomalyList.sort((a, b) => {
-      if (a.severity !== b.severity) return a.severity === "critical" ? -1 : 1;
-      return a.username.localeCompare(b.username);
+      const wA = TYPE_WEIGHT[a.type] * 10 + SEVERITY_WEIGHT[a.severity];
+      const wB = TYPE_WEIGHT[b.type] * 10 + SEVERITY_WEIGHT[b.severity];
+      return wB - wA;
     });
 
     return anomalyList;

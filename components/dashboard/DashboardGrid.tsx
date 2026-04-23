@@ -78,6 +78,8 @@ export default function DashboardGrid({ username }: { username: string | null })
   const [newName, setNewName]               = useState("");
   const saveTimerRef                        = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeProfileRef                    = useRef<string | null>(null);
+  const [currentBp, setCurrentBp]           = useState<"lg" | "md">("lg");
+  const preDragRef                          = useRef<{ bpLayout: typeof DEFAULT_LAYOUTS["lg"]; draggedId: string } | null>(null);
 
   useEffect(() => { activeProfileRef.current = activeProfile; }, [activeProfile]);
 
@@ -146,6 +148,54 @@ export default function DashboardGrid({ username }: { username: string | null })
       persistPrefs(all, hidden);
     },
     [hidden, persistPrefs]
+  );
+
+  // Swap-logik: spara layout innan drag startar
+  const handleDragStart = useCallback(
+    (_layout: unknown[], oldItem: { i: string }) => {
+      preDragRef.current = {
+        bpLayout: layouts[currentBp].map((l) => ({ ...l })),
+        draggedId: oldItem.i,
+      };
+    },
+    [currentBp, layouts]
+  );
+
+  // Swap-logik: om exakt ett annat objekt förflyttades, skicka det tillbaka
+  // till där det dragna objektet startade (byte av plats)
+  const handleDragStop = useCallback(
+    (
+      layout: typeof DEFAULT_LAYOUTS["lg"],
+      _old: unknown,
+      newItem: { i: string; x: number; y: number }
+    ) => {
+      const pre = preDragRef.current;
+      preDragRef.current = null;
+      if (!pre) return;
+
+      const origDragged = pre.bpLayout.find((l) => l.i === newItem.i);
+      if (!origDragged) return;
+
+      // Hitta objekt som rörde sig (exkl. det dragna)
+      const displaced = layout.filter((item) => {
+        if (item.i === newItem.i) return false;
+        const orig = pre.bpLayout.find((l) => l.i === item.i);
+        return orig && (orig.x !== item.x || orig.y !== item.y);
+      });
+
+      // Byt plats om exakt ett objekt förflyttades
+      if (displaced.length !== 1) return;
+      const [target] = displaced;
+
+      const swapped = layout.map((item) =>
+        item.i === target.i ? { ...item, x: origDragged.x, y: origDragged.y } : item
+      );
+
+      const newLayouts = { ...layouts, [currentBp]: swapped };
+      setLayouts(newLayouts);
+      persistPrefs(newLayouts, hidden);
+    },
+    [currentBp, layouts, hidden, persistPrefs]
   );
 
   // Byt profil
@@ -333,6 +383,9 @@ export default function DashboardGrid({ username }: { username: string | null })
         className="layout"
         layouts={visibleLayouts}
         onLayoutChange={handleLayoutChange}
+        onBreakpointChange={(bp) => setCurrentBp(bp as "lg" | "md")}
+        onDragStart={handleDragStart}
+        onDragStop={handleDragStop}
         breakpoints={{ lg: 1200, md: 996, sm: 768 }}
         cols={{ lg: 12, md: 10, sm: 6 }}
         rowHeight={40}
@@ -340,8 +393,6 @@ export default function DashboardGrid({ username }: { username: string | null })
         margin={[10, 10]}
         containerPadding={[12, 12]}
         resizeHandles={["se", "s", "e"]}
-        compactType={null}
-        preventCollision={true}
       >
         {!hidden.has("stats")     && <div key="stats"><StatsCardWidget /></div>}
         {!hidden.has("anomalies") && <div key="anomalies"><AnomaliesWidget /></div>}
