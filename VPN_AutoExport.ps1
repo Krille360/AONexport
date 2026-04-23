@@ -10,6 +10,9 @@ $MySqlExe    = "C:\Program Files\MySQL\MySQL Workbench 8.0\mysql.exe"
 # Heartbeat-logg var N:e cykel (5 sek * 60 = 5 min)
 $HeartbeatIntervallCykler = 60
 
+# Städning av föråldrade sessioner var N:e cykel (5 sek * 720 = 1 timme)
+$StadningIntervallCykler = 720
+
 # -- MariaDB-anslutning --
 $DbHost = "10.181.111.50"
 $DbPort = "3306"
@@ -107,6 +110,7 @@ function Insert-Samples {
     $values = @()
 
     foreach ($s in $Sessioner) {
+        if ($null -eq $s.ClientIPv4Address -or $null -eq $s.ConnectionStartTime) { continue }
         $clientIp  = Escape-SQL $s.ClientIPv4Address.ToString()
         $connSince = $s.ConnectionStartTime.ToString("yyyy-MM-dd HH:mm:ss")
         $bytesIn   = [uint64]$s.TotalBytesIn
@@ -114,10 +118,7 @@ function Insert-Samples {
         $values += "('$clientIp','$connSince','$ts',$bytesIn,$bytesOut)"
     }
 
-    $insertSql = @"
-INSERT INTO vpn_session_samples (client_ip, connected_since, sampled_at, bytes_in, bytes_out)
-VALUES $($values -join ',');
-"@
+    $insertSql = "INSERT INTO vpn_session_samples (client_ip, connected_since, sampled_at, bytes_in, bytes_out) VALUES $($values -join ',')"
 
     $r = Invoke-SQL -Sql $insertSql
     if ($r.ExitCode -ne 0) {
@@ -126,10 +127,7 @@ VALUES $($values -join ',');
     }
 
     # Behåll 30 dagars historik för graferna
-    $pruneSql = @"
-DELETE FROM vpn_session_samples WHERE sampled_at < NOW() - INTERVAL 30 DAY;
-"@
-    Invoke-SQL -Sql $pruneSql | Out-Null
+    Invoke-SQL -Sql "DELETE FROM vpn_session_samples WHERE sampled_at < NOW() - INTERVAL 30 DAY" | Out-Null
 }
 
 function Upsert-Sessions {
@@ -139,11 +137,15 @@ function Upsert-Sessions {
     $values = @()
 
     foreach ($s in $Sessioner) {
-        $username    = Escape-SQL ($s.UserName -join ", ")
-        $tunnelType  = Escape-SQL $s.TunnelType
-        $authMethod  = Escape-SQL $s.AuthMethod
+        if ($null -eq $s.ClientIPv4Address -or $null -eq $s.ConnectionStartTime) {
+            Write-Log "VARNING: Session med null-fält hoppas över i Upsert"
+            continue
+        }
+        $username    = Escape-SQL (($s.UserName -join ", ") + "")
+        $tunnelType  = Escape-SQL ("$($s.TunnelType)")
+        $authMethod  = Escape-SQL ("$($s.AuthMethod)")
         $clientIp    = Escape-SQL $s.ClientIPv4Address.ToString()
-        $clientExtIp = Escape-SQL $s.ClientExternalAddress.ToString()
+        $clientExtIp = Escape-SQL (if ($s.ClientExternalAddress) { $s.ClientExternalAddress.ToString() } else { "" })
         $connSince   = $s.ConnectionStartTime.ToString("yyyy-MM-dd HH:mm:ss")
         $durMin      = [math]::Round($s.ConnectionDuration / 60, 1)
         $bwKbps      = [math]::Round($s.Bandwidth / 1000, 1)
@@ -156,26 +158,62 @@ function Upsert-Sessions {
         $values += "('$ts','$ts','$username','$tunnelType','$authMethod','$clientIp','$clientExtIp','$connSince',$durMin,$bwKbps,$bytesIn,$bytesOut,'$state','$transition')"
     }
 
-    $sql = @"
-INSERT INTO vpn_sessions
-  (first_seen,last_seen,username,tunnel_type,auth_method,client_ip,client_external_ip,
-   connected_since,duration_min,bandwidth_kbps,total_bytes_in,total_bytes_out,
-   user_activity_state,transition_technology)
-VALUES $($values -join ',')
-ON DUPLICATE KEY UPDATE
-  last_seen           = VALUES(last_seen),
-  duration_min        = VALUES(duration_min),
-  bandwidth_kbps      = VALUES(bandwidth_kbps),
-  total_bytes_in      = VALUES(total_bytes_in),
-  total_bytes_out     = VALUES(total_bytes_out),
-  user_activity_state = VALUES(user_activity_state);
-"@
+    if ($values.Count -eq 0) {
+        Write-Log "VARNING: Inga giltiga sessioner att skriva till DB (alla hade null-fält)"
+        return $false
+    }
+
+    $sql  = "INSERT INTO vpn_sessions"
+    $sql += "  (first_seen,last_seen,username,tunnel_type,auth_method,client_ip,client_external_ip,"
+    $sql += "   connected_since,duration_min,bandwidth_kbps,total_bytes_in,total_bytes_out,"
+    $sql += "   user_activity_state,transition_technology)"
+    $sql += " VALUES $($values -join ',')"
+    $sql += " ON DUPLICATE KEY UPDATE"
+    $sql += "  last_seen           = VALUES(last_seen),"
+    $sql += "  duration_min        = VALUES(duration_min),"
+    $sql += "  bandwidth_kbps      = VALUES(bandwidth_kbps),"
+    $sql += "  total_bytes_in      = VALUES(total_bytes_in),"
+    $sql += "  total_bytes_out     = VALUES(total_bytes_out),"
+    $sql += "  user_activity_state = VALUES(user_activity_state);"
 
     $r = Invoke-SQL -Sql $sql
     if ($r.ExitCode -ne 0) {
         Write-Log "FEL: Upsert misslyckades - $($r.Output)"
     }
     return ($r.ExitCode -eq 0)
+}
+
+function Close-StaleSessions {
+    param($AktivaSessioner)
+
+    if ($AktivaSessioner.Count -gt 0) {
+        $pairs = @()
+        foreach ($s in $AktivaSessioner) {
+            if ($null -eq $s.ClientIPv4Address -or $null -eq $s.ConnectionStartTime) { continue }
+            $ip = Escape-SQL $s.ClientIPv4Address.ToString()
+            $cs = $s.ConnectionStartTime.ToString("yyyy-MM-dd HH:mm:ss")
+            $pairs += "('$ip','$cs')"
+        }
+        if ($pairs.Count -eq 0) {
+            Write-Log "VARNING: Inga giltiga sessioner att skydda - städning hoppas över"
+            return
+        }
+        $notIn = $pairs -join ","
+        $sql = "UPDATE vpn_sessions SET last_seen = NOW() - INTERVAL 10 MINUTE WHERE last_seen >= NOW() - INTERVAL 2 MINUTE AND (client_ip, connected_since) NOT IN ($notIn);"
+    } else {
+        $sql = "UPDATE vpn_sessions SET last_seen = NOW() - INTERVAL 10 MINUTE WHERE last_seen >= NOW() - INTERVAL 2 MINUTE;"
+    }
+
+    try {
+        $r = Invoke-SQL -Sql $sql
+        if ($r.ExitCode -eq 0) {
+            Write-Log "STÄDNING: Föråldrade sessioner stängda i DB"
+        } else {
+            Write-Log "FEL: Städning misslyckades - $($r.Output)"
+        }
+    } catch {
+        Write-Log "FEL: Undantag i Close-StaleSessions - $_"
+    }
 }
 
 function Export-VPNSessions {
@@ -235,6 +273,11 @@ function Export-VPNSessions {
     if ($script:CykelRaknare % $HeartbeatIntervallCykler -eq 0) {
         Write-Log "HEARTBEAT: $($sessioner.Count) aktiv(a) session(er)"
     }
+
+    # Timvis städning: stäng sessioner i DB som inte längre är aktiva på servern
+    if ($script:CykelRaknare % $StadningIntervallCykler -eq 0) {
+        Close-StaleSessions -AktivaSessioner $sessioner
+    }
 }
 
 # -- Testa anslutning --
@@ -247,6 +290,20 @@ if ($test.ExitCode -ne 0) {
 Write-Log "OK: Databasanslutning fungerar"
 
 Initialize-Database
+
+# Initial städning vid uppstart (fångar upp sessioner som aldrig stängdes korrekt)
+# Körs bara om vi lyckades hämta sessioner (0 kan betyda cmdlet-fel, inte noll sessioner)
+Write-Log "START: Kör initial städning av föråldrade sessioner..."
+$initSessioner = $null
+try {
+    $initSessioner = Get-RemoteAccessConnectionStatistics -ErrorAction Stop
+    Write-Log "START: Hämtade $($initSessioner.Count) aktiva sessioner från RRAS"
+} catch {
+    Write-Log "VARNING: Kunde inte hämta sessioner vid uppstart - städning hoppas över. Fel: $_"
+}
+if ($null -ne $initSessioner) {
+    Close-StaleSessions -AktivaSessioner $initSessioner
+}
 
 Write-Log "START: VPN-loggning startad (intervall: $IntervalSek sek, heartbeat var $($HeartbeatIntervallCykler * $IntervalSek) sek)"
 
