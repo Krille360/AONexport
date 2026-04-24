@@ -26,7 +26,7 @@ function fmtBits(bps: number): string {
 }
 
 function fmtDuration(min: number): { value: string; label: string } {
-  if (min >= 60) return { value: (min / 60).toFixed(1) + "t", label: "Snitt-tid" };
+  if (min >= 60) return { value: (min / 60).toFixed(1) + "h", label: "Snitt-tid" };
   return { value: min.toFixed(0) + " min", label: "Snitt-tid" };
 }
 

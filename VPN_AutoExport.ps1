@@ -36,9 +36,13 @@ function Write-Log {
 
 function Invoke-SQL {
     param([string]$Sql)
+    # Beräkna UTC-offset för lokaltid dynamiskt (hanterar CET/CEST automatiskt)
+    $offset = [System.TimeZoneInfo]::Local.GetUtcOffset([DateTime]::Now)
+    $sign   = if ($offset.TotalMinutes -ge 0) { "+" } else { "-" }
+    $tzStr  = "{0}{1:00}:{2:00}" -f $sign, [Math]::Abs($offset.Hours), [Math]::Abs($offset.Minutes)
     $env:MYSQL_PWD = $DbPass
     # Pipe via stdin – hanterar flerradigt SQL korrekt till skillnad från --execute
-    $result = $Sql | & $MySqlExe --host=$DbHost --port=$DbPort --user=$DbUser --database=$DbName 2>&1
+    $result = $Sql | & $MySqlExe --host=$DbHost --port=$DbPort --user=$DbUser --database=$DbName "--init-command=SET time_zone='$tzStr';" 2>&1
     $exitCode = $LASTEXITCODE
     $env:MYSQL_PWD = $null
     return [PSCustomObject]@{ Output = $result; ExitCode = $exitCode }

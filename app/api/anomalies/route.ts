@@ -10,11 +10,12 @@ export type AnomalySeverity = "warning" | "critical";
 export type AnomalyType     = "long_session" | "high_data" | "high_rate" | "rapid_reconnect";
 
 export interface Anomaly {
-  type:     AnomalyType;
-  severity: AnomalySeverity;
-  username: string;
-  value:    string;
-  detail:   string;
+  type:      AnomalyType;
+  severity:  AnomalySeverity;
+  username:  string;
+  value:     string;
+  detail:    string;
+  sortValue: number; // råvärde för sekundär sortering, visas ej i UI
 }
 
 // Tröskelvärden
@@ -116,12 +117,14 @@ export async function GET() {
           type: "long_session", severity: "critical", username: s.username,
           value: `${Math.floor(durH)}t ${Math.round(durMin % 60)}m`,
           detail: `Aktiv session > ${THRESHOLDS.session_crit_h}h`,
+          sortValue: durMin,
         });
       } else if (durH >= THRESHOLDS.session_warn_h) {
         anomalyList.push({
           type: "long_session", severity: "warning", username: s.username,
           value: `${Math.floor(durH)}t ${Math.round(durMin % 60)}m`,
           detail: `Aktiv session > ${THRESHOLDS.session_warn_h}h`,
+          sortValue: durMin,
         });
       }
 
@@ -131,12 +134,14 @@ export async function GET() {
           type: "high_data", severity: "critical", username: s.username,
           value: fmtBytes(totalBytes),
           detail: `Sessionstrafik > ${THRESHOLDS.data_crit_gb} GB`,
+          sortValue: totalBytes,
         });
       } else if (totalGb >= THRESHOLDS.data_warn_gb) {
         anomalyList.push({
           type: "high_data", severity: "warning", username: s.username,
           value: fmtBytes(totalBytes),
           detail: `Sessionstrafik > ${THRESHOLDS.data_warn_gb} GB`,
+          sortValue: totalBytes,
         });
       }
 
@@ -146,12 +151,14 @@ export async function GET() {
           type: "high_rate", severity: "critical", username: s.username,
           value: fmtMbits(Math.max(bpsIn, bpsOut)),
           detail: `Bandbredd > ${THRESHOLDS.rate_crit_mbps} Mbit/s`,
+          sortValue: maxMbps,
         });
       } else if (maxMbps >= THRESHOLDS.rate_warn_mbps) {
         anomalyList.push({
           type: "high_rate", severity: "warning", username: s.username,
           value: fmtMbits(Math.max(bpsIn, bpsOut)),
           detail: `Bandbredd > ${THRESHOLDS.rate_warn_mbps} Mbit/s`,
+          sortValue: maxMbps,
         });
       }
     }
@@ -164,12 +171,14 @@ export async function GET() {
           type: "high_data", severity: "critical", username: d.username,
           value: `${totalGb.toFixed(1)} GB idag`,
           detail: `Daglig trafik > ${THRESHOLDS.daily_crit_gb} GB`,
+          sortValue: Number(d.total_mb),
         });
       } else if (totalGb >= THRESHOLDS.daily_warn_gb) {
         anomalyList.push({
           type: "high_data", severity: "warning", username: d.username,
           value: `${totalGb.toFixed(1)} GB idag`,
           detail: `Daglig trafik > ${THRESHOLDS.daily_warn_gb} GB`,
+          sortValue: Number(d.total_mb),
         });
       }
     }
@@ -184,24 +193,31 @@ export async function GET() {
         username: r.username,
         value: `${cnt} sessioner / ${THRESHOLDS.reconnect_window_h}h`,
         detail: `Fler än ${severity === "critical" ? THRESHOLDS.reconnect_crit_cnt : THRESHOLDS.reconnect_warn_cnt} sessioner senaste timmen`,
+        sortValue: cnt,
       });
     }
 
-    // Sortera med weight-system:
-    // Prioritet per typ (högst = visas överst): high_rate > rapid_reconnect > high_data > long_session
-    // Inom varje typ: critical (2) före warning (1), sedan fallande numeriskt värde
+    // Sortera:
+    // 1. Severity: critical alltid före warning
+    // 2. Typ: high_rate > rapid_reconnect > high_data > long_session
+    // 3. Fallande numeriskt värde (t.ex. högst Mbit/s eller längst tid överst)
     const TYPE_WEIGHT: Record<AnomalyType, number> = {
       high_rate:       4,
       rapid_reconnect: 3,
       high_data:       2,
       long_session:    1,
     };
-    const SEVERITY_WEIGHT: Record<AnomalySeverity, number> = { critical: 2, warning: 1 };
 
     anomalyList.sort((a, b) => {
-      const wA = TYPE_WEIGHT[a.type] * 10 + SEVERITY_WEIGHT[a.severity];
-      const wB = TYPE_WEIGHT[b.type] * 10 + SEVERITY_WEIGHT[b.severity];
-      return wB - wA;
+      // 1. Severity (critical=0 före warning=1)
+      const sA = a.severity === "critical" ? 0 : 1;
+      const sB = b.severity === "critical" ? 0 : 1;
+      if (sA !== sB) return sA - sB;
+      // 2. Typ
+      const tDiff = TYPE_WEIGHT[b.type] - TYPE_WEIGHT[a.type];
+      if (tDiff !== 0) return tDiff;
+      // 3. Fallande numeriskt värde
+      return b.sortValue - a.sortValue;
     });
 
     return anomalyList;

@@ -266,21 +266,21 @@ function UserSessionsModal({
       <div className="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-5xl max-h-[85vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700 shrink-0">
-          <div className="flex flex-col gap-0.5">
+          <div className="flex flex-col gap-1.5">
             {type === "user" ? (
               <>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500 uppercase tracking-wide w-16 shrink-0">Användare</span>
+                <div className="grid grid-cols-[5.5rem_1fr] items-center gap-x-3">
+                  <span className="text-xs text-gray-500 uppercase tracking-wide">Användare</span>
                   <span className="text-white font-semibold">{formatUsername(value)}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500 uppercase tracking-wide w-16 shrink-0">Epost</span>
+                <div className="grid grid-cols-[5.5rem_1fr] items-center gap-x-3">
+                  <span className="text-xs text-gray-500 uppercase tracking-wide">Epost</span>
                   <span className="text-xs text-gray-400 font-mono">{value}</span>
                 </div>
               </>
             ) : (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500 uppercase tracking-wide mr-2">IP-adress</span>
+              <div className="grid grid-cols-[5.5rem_1fr] items-center gap-x-3">
+                <span className="text-xs text-gray-500 uppercase tracking-wide">IP-adress</span>
                 <span className="text-white font-semibold font-mono">{value}</span>
               </div>
             )}
