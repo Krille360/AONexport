@@ -126,8 +126,8 @@ export default function BandwidthChartWidget() {
                   }}
                   labelStyle={{ color: "#9ca3af" }}
                   labelFormatter={(v) => String(v).substring(0, 16)}
-                  formatter={(v: number, name: string) => [
-                    `${v.toFixed(3)} Mbit/s`,
+                  formatter={(v: unknown, name: unknown) => [
+                    `${Number(v ?? 0).toFixed(3)} Mbit/s`,
                     name === "mbps_in" ? "↑ Upp" : "↓ Ned",
                   ]}
                 />

@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Responsive, WidthProvider } from "react-grid-layout";
+import React from "react";
+import { ResponsiveGridLayout, useContainerWidth } from "react-grid-layout";
+import type { Layout, LayoutItem, ResponsiveLayouts } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 
@@ -14,8 +16,6 @@ import DailySummaryWidget     from "@/components/widgets/DailySummaryWidget";
 import SessionHistoryWidget   from "@/components/widgets/SessionHistoryWidget";
 import TopBandwidthWidget     from "@/components/widgets/TopBandwidthWidget";
 import AnomaliesWidget        from "@/components/widgets/AnomaliesWidget";
-
-const ResponsiveGridLayout = WidthProvider(Responsive);
 
 const STORAGE_KEY = "vpn-dashboard-layout";
 
@@ -80,6 +80,7 @@ export default function DashboardGrid({ username }: { username: string | null })
   const activeProfileRef                    = useRef<string | null>(null);
   const [currentBp, setCurrentBp]           = useState<"lg" | "md">("lg");
   const preDragRef                          = useRef<{ bpLayout: { i: string; x: number; y: number; w: number; h: number }[]; draggedId: string } | null>(null);
+  const { width: gridWidth, containerRef }  = useContainerWidth();
 
   useEffect(() => { activeProfileRef.current = activeProfile; }, [activeProfile]);
 
@@ -143,16 +144,18 @@ export default function DashboardGrid({ username }: { username: string | null })
   );
 
   const handleLayoutChange = useCallback(
-    (_: unknown, all: typeof DEFAULT_LAYOUTS) => {
-      setLayouts(all);
-      persistPrefs(all, hidden);
+    (_: Layout, all: ResponsiveLayouts<string>) => {
+      const merged = { ...DEFAULT_LAYOUTS, ...all } as typeof DEFAULT_LAYOUTS;
+      setLayouts(merged);
+      persistPrefs(merged, hidden);
     },
     [hidden, persistPrefs]
   );
 
   // Swap-logik: spara layout innan drag startar
   const handleDragStart = useCallback(
-    (_layout: unknown[], oldItem: { i: string }) => {
+    (_layout: Layout, oldItem: LayoutItem | null) => {
+      if (!oldItem) return;
       preDragRef.current = {
         bpLayout: layouts[currentBp].map((l) => ({ ...l })),
         draggedId: oldItem.i,
@@ -165,19 +168,19 @@ export default function DashboardGrid({ username }: { username: string | null })
   // till där det dragna objektet startade (byte av plats)
   const handleDragStop = useCallback(
     (
-      layout: { i: string; x: number; y: number; w: number; h: number }[],
-      _old: unknown,
-      newItem: { i: string; x: number; y: number }
+      layout: Layout,
+      _old: LayoutItem | null,
+      newItem: LayoutItem | null
     ) => {
       const pre = preDragRef.current;
       preDragRef.current = null;
-      if (!pre) return;
+      if (!pre || !newItem) return;
 
       const origDragged = pre.bpLayout.find((l) => l.i === newItem.i);
       if (!origDragged) return;
 
       // Hitta objekt som rörde sig (exkl. det dragna)
-      const displaced = layout.filter((item) => {
+      const displaced = [...layout].filter((item) => {
         if (item.i === newItem.i) return false;
         const orig = pre.bpLayout.find((l) => l.i === item.i);
         return orig && (orig.x !== item.x || orig.y !== item.y);
@@ -187,7 +190,7 @@ export default function DashboardGrid({ username }: { username: string | null })
       if (displaced.length !== 1) return;
       const [target] = displaced;
 
-      const swapped = layout.map((item) =>
+      const swapped = [...layout].map((item) =>
         item.i === target.i ? { ...item, x: origDragged.x, y: origDragged.y } : item
       );
 
@@ -379,6 +382,7 @@ export default function DashboardGrid({ username }: { username: string | null })
       </div>
 
       {/* Grid */}
+      <div ref={containerRef as React.RefObject<HTMLDivElement>} style={{ width: "100%" }}>
       <ResponsiveGridLayout
         className="layout"
         layouts={visibleLayouts}
@@ -389,10 +393,11 @@ export default function DashboardGrid({ username }: { username: string | null })
         breakpoints={{ lg: 1200, md: 996, sm: 768 }}
         cols={{ lg: 12, md: 10, sm: 6 }}
         rowHeight={40}
-        draggableHandle=".drag-handle"
+        dragConfig={{ handle: ".drag-handle" }}
         margin={[10, 10]}
         containerPadding={[12, 12]}
-        resizeHandles={["se", "s", "e"]}
+        resizeConfig={{ handles: ["se", "s", "e"] as const }}
+        width={gridWidth}
       >
         {!hidden.has("stats")     && <div key="stats"><StatsCardWidget /></div>}
         {!hidden.has("anomalies") && <div key="anomalies"><AnomaliesWidget /></div>}
@@ -404,7 +409,7 @@ export default function DashboardGrid({ username }: { username: string | null })
         {!hidden.has("daily")     && <div key="daily"><DailySummaryWidget /></div>}
         {!hidden.has("history")   && <div key="history"><SessionHistoryWidget /></div>}
       </ResponsiveGridLayout>
+      </div>
     </div>
   );
 }
-import "react-grid-layout/css/styles.css";

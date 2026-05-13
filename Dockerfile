@@ -1,12 +1,13 @@
 # ── Stage 1: beroenden ──────────────────────────────────────────────────────
-FROM node:22.12.0-alpine AS deps
+FROM node:24.15.0-alpine AS deps
 WORKDIR /app
 
+RUN npm install -g npm@11.14.1
 COPY package.json ./
 RUN npm install --legacy-peer-deps
 
-# ── Stage 2: bygg ────────────────────────────────────────────────────────────
-FROM node:22.12.0-alpine AS builder
+# ── Stage 2: bygg ──────────────────────────────────────────────
+FROM node:24.15.0-alpine AS builder
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
@@ -14,8 +15,8 @@ COPY . .
 
 RUN npm run build
 
-# ── Stage 3: produktion ───────────────────────────────────────────────────────
-FROM node:22.12.0-alpine AS runner
+# ── Stage 3: produktion ───────────────────────────────────────────────
+FROM node:24.15.0-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production

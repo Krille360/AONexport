@@ -116,7 +116,7 @@ export default function HourlyChartWidget() {
                   }}
                   labelStyle={{ color: "#9ca3af" }}
                   labelFormatter={(v) => String(v).substring(0, 16)}
-                  formatter={(v: number) => [v, "Unika användare"]}
+                  formatter={(v: unknown) => [String(v ?? ""), "Unika användare"]}
                 />
                 <Area
                   type="monotone"

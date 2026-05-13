@@ -109,8 +109,8 @@ function SessionChart({ clientIp, connectedSince }: { clientIp: string; connecte
           <Tooltip
             contentStyle={{ background: "#1f2937", border: "1px solid #374151", borderRadius: 6, fontSize: 11 }}
             labelFormatter={(v) => String(v).substring(0, 19)}
-            formatter={(v: number, name: string) => [
-              `${Number(v).toFixed(3)} Mbit/s`,
+            formatter={(v: unknown, name: unknown) => [
+              `${Number(v ?? 0).toFixed(3)} Mbit/s`,
               name === "mbps_in" ? "↑ Upp" : "↓ Ned",
             ]}
           />

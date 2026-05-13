@@ -107,7 +107,7 @@ export default function TopBandwidthWidget() {
                 color: "#f3f4f6",
                 fontSize: 12,
               }}
-              formatter={(v: number, name: string) => [
+              formatter={(v: unknown, name: unknown) => [
                 `${v} MB`,
                 name === "mb_in" ? "Upp" : "Ned",
               ]}

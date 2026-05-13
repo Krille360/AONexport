@@ -12,6 +12,7 @@ const REFRESH_MS = parseInt(
   process.env.NEXT_PUBLIC_REFRESH_INTERVAL ?? "30000",
   10
 );
+const PAGE_SIZE = 50;
 
 interface Session {
   username:           string;
@@ -52,32 +53,59 @@ function fmtDateTime(iso: string): string {
 
 export default function SessionHistoryWidget() {
   const [sessions, setSessions]           = useState<Session[]>([]);
+  const [total, setTotal]                 = useState(0);
+  const [page, setPage]                   = useState(1);
+  const [search, setSearch]               = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [loading, setLoading]             = useState(true);
   const [error, setError]                 = useState<string | null>(null);
   const [expanded, setExpanded]           = useState<string | null>(null);
   const [samples, setSamples]             = useState<Record<string, SamplePoint[]>>({});
   const [samplesLoading, setSamplesLoading] = useState<Set<string>>(new Set());
   const [samplesError, setSamplesError]   = useState<Record<string, string>>({});
-  const [filter, setFilter]               = useState("");
 
-  const load = useCallback(async () => {
+  // Debounce search → reset to page 1
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+      setExpanded(null);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const load = useCallback(async (showLoading = true) => {
     try {
+      if (showLoading) setLoading(true);
       setError(null);
-      const res = await fetch("/api/session-history", { cache: "no-store" });
+      const offset = (page - 1) * PAGE_SIZE;
+      const params = new URLSearchParams({
+        limit: String(PAGE_SIZE),
+        offset: String(offset),
+      });
+      if (debouncedSearch) params.set("search", debouncedSearch);
+      const res = await fetch(`/api/session-history?${params}`, { cache: "no-store" });
       if (!res.ok) throw new Error("Kunde inte hämta data");
-      setSessions(await res.json());
+      const data = await res.json();
+      setSessions(data.sessions);
+      setTotal(data.total);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Okänt fel");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, debouncedSearch]);
 
   useEffect(() => {
-    load();
-    const t = setInterval(load, REFRESH_MS);
+    load(true);
+    const t = setInterval(() => load(false), REFRESH_MS);
     return () => clearInterval(t);
   }, [load]);
+
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+    setExpanded(null);
+  };
 
   const sessionKey = (s: Session) => `${s.client_ip}|${s.connected_since}`;
 
@@ -114,35 +142,22 @@ export default function SessionHistoryWidget() {
     }
   };
 
-  const filtered = (filter.trim()
-    ? sessions.filter((s) => {
-        const f = filter.trim().toLowerCase();
-        const u = s.username.toLowerCase();
-        // Word-boundary matching: start of segment separated by ".", "-" or space
-        const matchesUser =
-          u.startsWith(f) ||
-          u.includes(`.${f}`) ||
-          u.includes(`-${f}`) ||
-          formatUsername(s.username).toLowerCase().split(" ").some((part) => part.startsWith(f));
-        return matchesUser || s.client_ip.includes(f) || s.client_external_ip.toLowerCase().includes(f);
-      })
-    : [...sessions]
-  ).sort((a, b) => (b.last_seen > a.last_seen ? 1 : b.last_seen < a.last_seen ? -1 : 0));
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <WidgetShell
       title="Historiska sessioner"
       loading={loading}
       error={error}
-      onRefresh={load}
+      onRefresh={() => load(true)}
     >
       <div className="flex flex-col h-full gap-2">
         {/* Filter */}
         <input
           type="text"
           placeholder="Sök användare / IP…"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
           className="shrink-0 bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded px-2 py-1 focus:outline-none focus:border-indigo-500 placeholder-gray-600"
         />
 
@@ -160,7 +175,7 @@ export default function SessionHistoryWidget() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((s) => {
+              {sessions.map((s) => {
                 const key       = sessionKey(s);
                 const isExp     = expanded === key;
                 const pts       = samples[key] ?? [];
@@ -213,11 +228,33 @@ export default function SessionHistoryWidget() {
             </tbody>
           </table>
 
-          {filtered.length === 0 && !loading && (
+          {sessions.length === 0 && !loading && (
             <div className="flex items-center justify-center h-20 text-gray-600 text-xs">
               Inga avslutade sessioner hittades
             </div>
           )}
+        </div>
+
+        {/* Pagination */}
+        <div className="shrink-0 flex items-center justify-between text-xs text-gray-500 border-t border-gray-800 pt-2">
+          <span>{total} sessioner totalt</span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handlePageChange(page - 1)}
+              disabled={page <= 1}
+              className="px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              ‹
+            </button>
+            <span>Sida {page} / {totalPages}</span>
+            <button
+              onClick={() => handlePageChange(page + 1)}
+              disabled={page >= totalPages}
+              className="px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              ›
+            </button>
+          </div>
         </div>
       </div>
     </WidgetShell>
@@ -269,8 +306,8 @@ function SessionChart({ data }: SessionChartProps) {
                 borderRadius: 8, color: "#f3f4f6", fontSize: 11,
               }}
               labelFormatter={(v) => String(v).substring(0, 19)}
-              formatter={(v: number, name: string) => [
-                `${Number(v).toFixed(3)} Mbit/s`,
+              formatter={(v: unknown, name: unknown) => [
+                `${Number(v ?? 0).toFixed(3)} Mbit/s`,
                 name === "mbps_in" ? "↑ Upp" : "↓ Ned",
               ]}
             />

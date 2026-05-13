@@ -48,6 +48,24 @@ CREATE TABLE IF NOT EXISTS vpn_user_layouts (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Löser problemet med att samma användare/IP dyker upp på 10+ rader
+
+-- Uppdatera vpn_daily_summary för att använda COALESCE(connected_since, first_seen)
+-- så att sessioner hamnar på rätt dag
+CREATE OR REPLACE VIEW vpn_daily_summary AS
+SELECT
+    DATE(COALESCE(connected_since, first_seen))        AS dag,
+    username,
+    COUNT(*)                                           AS antal_samples,
+    MIN(connected_since)                               AS forsta_anslutning,
+    MAX(last_seen)                                     AS senaste_aktivitet,
+    ROUND(MAX(duration_min), 1)                        AS max_duration_min,
+    ROUND(MAX(total_bytes_in)  / 1048576, 2)           AS max_mb_in,
+    ROUND(MAX(total_bytes_out) / 1048576, 2)           AS max_mb_out,
+    tunnel_type,
+    auth_method
+FROM vpn_sessions
+GROUP BY DATE(COALESCE(connected_since, first_seen)), username, tunnel_type, auth_method;
+
 CREATE OR REPLACE VIEW vpn_active_sessions AS
 SELECT
     username,

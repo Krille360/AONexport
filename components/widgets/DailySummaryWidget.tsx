@@ -39,11 +39,23 @@ function fmtMb(mb: number | null): string {
 
 export default function DailySummaryWidget() {
   const [rows, setRows]     = useState<DailySummary[]>([]);
+  const [days, setDays]     = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]   = useState<string | null>(null);
   const [dayFilter, setDayFilter] = useState<string>("");
   // Empty = implicit sort only. Click = primary key, Shift+click = add secondary key.
   const [sortKeys, setSortKeys] = useState<SortKey[]>([]);
+
+  // Fetch the list of available days once on mount
+  useEffect(() => {
+    fetch("/api/daily-summary", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d: string[]) => {
+        setDays(d);
+        if (d.length > 0) setDayFilter(d[0]);
+      })
+      .catch(() => {/* non-critical */});
+  }, []);
 
   const handleSort = (col: SortCol, e: React.MouseEvent) => {
     if (e.shiftKey) {
@@ -68,16 +80,13 @@ export default function DailySummaryWidget() {
   };
 
   const fetch_ = useCallback(async () => {
+    if (!dayFilter) return;
     try {
       setError(null);
-      const res = await fetch("/api/daily-summary", { cache: "no-store" });
+      const res = await fetch(`/api/daily-summary?day=${encodeURIComponent(dayFilter)}`, { cache: "no-store" });
       if (!res.ok) throw new Error("Kunde inte hämta data");
       const data: DailySummary[] = await res.json();
       setRows(data);
-      // Default to latest day
-      if (data.length > 0 && !dayFilter) {
-        setDayFilter(data[0].dag);
-      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Okänt fel");
     } finally {
@@ -91,15 +100,7 @@ export default function DailySummaryWidget() {
     return () => clearInterval(t);
   }, [fetch_]);
 
-  const days = Array.from(new Set(rows.map((r) => r.dag))).sort().reverse();
-  // Only show rows where senaste_aktivitet falls on the selected day
-  const base = rows.filter((r) => {
-    if (dayFilter && r.dag !== dayFilter) return false;
-    if (dayFilter && r.senaste_aktivitet?.slice(0, 10) !== dayFilter) return false;
-    return true;
-  });
-
-  const sorted = [...base].sort((a, b) => {
+  const sorted = [...rows].sort((a, b) => {
     for (const { col, dir } of sortKeys) {
       let cmp = 0;
       if (col === "username") {
@@ -159,7 +160,7 @@ export default function DailySummaryWidget() {
             ))}
           </select>
           <span className="text-xs text-gray-600">
-            ({sorted.length} anvandare)
+            ({sorted.length} användare)
           </span>
         </div>
 
