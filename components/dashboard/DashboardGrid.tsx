@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import React from "react";
-import { ResponsiveGridLayout, useContainerWidth } from "react-grid-layout";
+import { ResponsiveGridLayout } from "react-grid-layout";
 import type { Layout, LayoutItem, ResponsiveLayouts } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -80,7 +79,19 @@ export default function DashboardGrid({ username }: { username: string | null })
   const activeProfileRef                    = useRef<string | null>(null);
   const [currentBp, setCurrentBp]           = useState<"lg" | "md">("lg");
   const preDragRef                          = useRef<{ bpLayout: { i: string; x: number; y: number; w: number; h: number }[]; draggedId: string } | null>(null);
-  const { width: gridWidth, containerRef }  = useContainerWidth();
+
+  // Measure container width with ResizeObserver
+  const [containerEl, setContainerEl]       = useState<HTMLDivElement | null>(null);
+  const [gridWidth, setGridWidth]           = useState(0);
+  useEffect(() => {
+    if (!containerEl) return;
+    setGridWidth(containerEl.offsetWidth);
+    const ro = new ResizeObserver(([entry]) => {
+      setGridWidth(entry.contentRect.width);
+    });
+    ro.observe(containerEl);
+    return () => ro.disconnect();
+  }, [containerEl]);
 
   useEffect(() => { activeProfileRef.current = activeProfile; }, [activeProfile]);
 
@@ -382,8 +393,9 @@ export default function DashboardGrid({ username }: { username: string | null })
       </div>
 
       {/* Grid */}
-      <div ref={containerRef as React.RefObject<HTMLDivElement>} style={{ width: "100%" }}>
-      <ResponsiveGridLayout
+      <div ref={setContainerEl} style={{ width: "100%" }}>
+        {gridWidth > 0 && (
+        <ResponsiveGridLayout
         className="layout"
         layouts={visibleLayouts}
         onLayoutChange={handleLayoutChange}
@@ -409,6 +421,7 @@ export default function DashboardGrid({ username }: { username: string | null })
         {!hidden.has("daily")     && <div key="daily"><DailySummaryWidget /></div>}
         {!hidden.has("history")   && <div key="history"><SessionHistoryWidget /></div>}
       </ResponsiveGridLayout>
+        )}
       </div>
     </div>
   );
